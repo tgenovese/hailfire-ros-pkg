@@ -1,0 +1,9 @@
+<stack>
+  <description brief="hailfire">hailfire</description>
+  <author>Maintained by Thierry Genovese</author>
+  <license>BSD</license>  
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire</url>
+  <depend stack="ros" /> <!-- std_msgs, roscpp -->
+
+</stack>
