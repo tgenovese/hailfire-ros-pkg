@@ -23,6 +23,7 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #common commands for building c++ executables and libraries
 rosbuild_add_library(${PROJECT_NAME} src/klv_helper.cpp)
+rosbuild_add_library(${PROJECT_NAME} src/spi_device.cpp)
 #target_link_libraries(${PROJECT_NAME} another_library)
 #rosbuild_add_boost_directories()
 #rosbuild_link_boost(${PROJECT_NAME} thread)
@@ -31,3 +32,6 @@ rosbuild_add_library(${PROJECT_NAME} src/klv_helper.cpp)
 
 rosbuild_add_gtest(test_klv_helper test/test_klv_helper.cpp)
 target_link_libraries(test_klv_helper ${PROJECT_NAME})
+
+rosbuild_add_gtest(test_spi_device test/test_spi_device.cpp)
+target_link_libraries(test_spi_device ${PROJECT_NAME})
