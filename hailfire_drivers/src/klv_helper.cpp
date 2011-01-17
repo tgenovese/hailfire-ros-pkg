@@ -90,6 +90,7 @@ klv_byte_map_t decode_klv(klv_byte_vector_t const &bytes)
         else
         {
           state = READ_KEY;
+          keys_values[key].clear();
         }
         break;
       case READ_VALUE:
@@ -141,6 +142,7 @@ klv_byte_map_t reconcile_klv(klv_byte_map_t const &keys_placeholders, klv_byte_v
         else
         {
           state = READ_KEY;
+          keys_values[key].clear();
         }
         break;
       case READ_VALUE:
