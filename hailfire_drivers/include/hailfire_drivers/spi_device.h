@@ -51,7 +51,7 @@ public:
    * @brief Constructor
    * @param dev_name The name of the spidev device file (eg: "/dev/spidev1.0")
    */
-  SPIDevice(char *dev_name);
+  SPIDevice(const char *dev_name);
 
   /**
    * @brief Destructor: cleans up

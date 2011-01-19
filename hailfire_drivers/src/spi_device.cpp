@@ -36,7 +36,7 @@
 namespace hailfire_drivers
 {
 
-SPIDevice::SPIDevice(char *dev_name)
+SPIDevice::SPIDevice(const char *dev_name)
 {
   fd_ = open(dev_name, O_RDWR);
   ROS_ASSERT(fd_ >= 0);
