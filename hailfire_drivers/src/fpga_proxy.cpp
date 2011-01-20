@@ -64,11 +64,11 @@ public:
    * Creates and configures the SPI device, then advertises the service.
    *
    * Uses the following parameters from the parameter server:
-   * ~/spidev/dev_name        used for SPI device instance (defaults to "spidev1.0")
-   * ~/spidev/mode            appropriate setter is called if present
-   * ~/spidev/lsb_first       appropriate setter is called if present
-   * ~/spidev/bits_per_word   appropriate setter is called if present
-   * ~/spidev/max_speed       appropriate setter is called if present
+   * ~spidev/dev_name        used for SPI device instance (defaults to "spidev1.0")
+   * ~spidev/mode            appropriate setter is called if present
+   * ~spidev/lsb_first       appropriate setter is called if present
+   * ~spidev/bits_per_word   appropriate setter is called if present
+   * ~spidev/max_speed       appropriate setter is called if present
    *
    */
   FPGAProxy();
@@ -81,9 +81,9 @@ public:
 private:
 
   /**
-   * @brief Service handle.
+   * @brief Service handler.
    *
-   * This method is called by ROS when the a request to the service is made.
+   * This method is called by ROS when a request to the service is made.
    * It transforms the keys and values in a format accepted by the FPGA (Key,
    * Length, Value encoded byte array), sends it to the FPGA via SPI and
    * transforms the FPGA response back to a ROS format.
