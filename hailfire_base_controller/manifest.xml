@@ -1,0 +1,16 @@
+<package>
+  <description brief="hailfire_base_controller">
+
+     hailfire_base_controller
+
+  </description>
+  <author>Thierry Genovese</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire_base_controller</url>
+  <depend package="geometry_msgs"/>
+  <depend package="roscpp"/>
+
+</package>
+
+
