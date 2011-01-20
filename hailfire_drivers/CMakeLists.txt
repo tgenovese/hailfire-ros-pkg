@@ -30,16 +30,11 @@ rosbuild_gensrv()
 #target_link_libraries(example ${PROJECT_NAME})
 
 #build library with non-main source files
-rosbuild_add_library(${PROJECT_NAME} src/klv_helper.cpp)
 rosbuild_add_library(${PROJECT_NAME} src/spi_device.cpp)
 
 #build fpga_proxy service node
 rosbuild_add_executable(fpga_proxy src/fpga_proxy.cpp)
 target_link_libraries(fpga_proxy ${PROJECT_NAME})
-
-#build test_klv_helper gtest executable
-rosbuild_add_gtest(test_klv_helper test/test_klv_helper.cpp)
-target_link_libraries(test_klv_helper ${PROJECT_NAME})
 
 #build test_spi_device gtest executable
 rosbuild_add_gtest(test_spi_device test/test_spi_device.cpp)
