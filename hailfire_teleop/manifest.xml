@@ -1,0 +1,17 @@
+<package>
+  <description brief="hailfire_teleop">
+
+     hailfire_teleop
+
+  </description>
+  <author>Thierry Genovese</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire_teleop</url>
+  <depend package="geometry_msgs"/>
+  <depend package="joy"/>
+  <depend package="roscpp"/>
+
+</package>
+
+
