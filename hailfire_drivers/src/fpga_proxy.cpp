@@ -101,34 +101,44 @@ FPGAProxy::FPGAProxy()
   ros::NodeHandle nh_param("~spidev");
 
   std::string dev_name;
-  nh_param.param(std::string("dev_name"), dev_name, std::string("/dev/spidev1.0"));
-  ROS_INFO("SPI device: %s", dev_name.c_str());
+  nh_param.param("dev_name", dev_name, std::string("/dev/spidev1.0"));
 
-  spi_device_ = new hailfire_drivers::SPIDevice(dev_name.c_str());
+  bool inhibit;
+  nh_param.param("inhibit", inhibit, false);
+  if (inhibit)
+  {
+    ROS_INFO("~spidev/inhibit set: SPI will not be used");
+    spi_device_ = NULL;
+  }
+  else
+  {
+    ROS_INFO("SPI device: %s", dev_name.c_str());
+    spi_device_ = new hailfire_drivers::SPIDevice(dev_name.c_str());
+  }
 
   int mode;
-  if (nh_param.getParam("mode", mode))
+  if (spi_device_ && nh_param.getParam("mode", mode))
   {
     ROS_INFO("SPI mode: %u", mode);
     spi_device_->setMode(mode);
   }
 
   bool lsb_first;
-  if (nh_param.getParam("lsb_first", lsb_first))
+  if (spi_device_ && nh_param.getParam("lsb_first", lsb_first))
   {
     ROS_INFO("SPI lsb_first: %s", (lsb_first ? "true" : "false"));
     spi_device_->setLSBFirst(lsb_first);
   }
 
   int bits_per_word;
-  if (nh_param.getParam("bits_per_word", bits_per_word))
+  if (spi_device_ && nh_param.getParam("bits_per_word", bits_per_word))
   {
     ROS_INFO("SPI bits_per_word: %u", bits_per_word);
     spi_device_->setBitsPerWord(bits_per_word);
   }
 
   int max_speed;
-  if (nh_param.getParam("max_speed", max_speed))
+  if (spi_device_ && nh_param.getParam("max_speed", max_speed))
   {
     ROS_INFO("SPI max_speed: %u", max_speed);
     spi_device_->setMaxSpeed(max_speed);
@@ -140,7 +150,10 @@ FPGAProxy::FPGAProxy()
 
 FPGAProxy::~FPGAProxy()
 {
-  delete spi_device_;
+  if (spi_device_)
+  {
+    delete spi_device_;
+  }
 }
 
 bool FPGAProxy::doTransfer(hailfire_drivers::FPGATransfer::Request &req,
@@ -182,7 +195,10 @@ bool FPGAProxy::doTransfer(hailfire_drivers::FPGATransfer::Request &req,
 
   // Synchronous SPI transfer, using the same vector to store the received
   // bytes (same length so valid memory space)
-  spi_device_->doSyncTransfer(&tx_rx_bytes[0], &tx_rx_bytes[0], nb_bytes);
+  if (spi_device_)
+  {
+    spi_device_->doSyncTransfer(&tx_rx_bytes[0], &tx_rx_bytes[0], nb_bytes);
+  }
 
   ROS_DEBUG_STREAM("rx bytes:" << dump_bytes(tx_rx_bytes));
 
