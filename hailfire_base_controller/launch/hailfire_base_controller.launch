@@ -1,0 +1,25 @@
+<!-- FIXME: values are foobar -->
+<launch>
+  <!-- Launches the hailfire_base_controller/base_controller node with suitable params -->
+  <node name="base_controller" pkg="hailfire_base_controller" type="base_controller" required="true" output="screen">
+    <!-- Odometer params -->
+    <param name="odometer_imp_per_m" type="double" value="60000"/>
+    <param name="odometer_track_m" type="double" value="0.20"/>
+
+    <!-- Angle control system params -->
+    <param name="angle_cs/max_acceleration" type="double" value="0.5"/>
+    <param name="angle_cs/max_deceleration" type="double" value="0.5"/>
+    <param name="angle_cs/correct_filter_gain_p" type="int" value="1"/>
+    <param name="angle_cs/correct_filter_gain_i" type="int" value="0"/>
+    <param name="angle_cs/correct_filter_gain_d" type="int" value="0"/>
+    <param name="angle_cs/correct_filter_out_shift" type="int" value="0"/>
+
+    <!-- Distance control system params -->
+    <param name="distance_cs/max_acceleration" type="double" value="0.5"/>
+    <param name="distance_cs/max_deceleration" type="double" value="0.5"/>
+    <param name="distance_cs/correct_filter_gain_p" type="int" value="1"/>
+    <param name="distance_cs/correct_filter_gain_i" type="int" value="0"/>
+    <param name="distance_cs/correct_filter_gain_d" type="int" value="0"/>
+    <param name="distance_cs/correct_filter_out_shift" type="int" value="0"/>
+  </node>
+</launch>
