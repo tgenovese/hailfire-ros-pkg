@@ -31,9 +31,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "hailfire_drivers/spi_device.h"
-#include "hailfire_drivers/FPGAKeyValue.h"
-#include "hailfire_drivers/FPGATransfer.h"
+#include "hailfire_fpga_proxy/spi_device.h"
+#include "hailfire_fpga_proxy/FPGAKeyValue.h"
+#include "hailfire_fpga_proxy/FPGATransfer.h"
 
 /**
  * @brief Returns an hexadecimal dump of the given byte array.
@@ -43,7 +43,7 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes);
 /**
  * @brief Returns an hexadecimal dump of the given FPGAKeyValue array.
  */
-std::string dump_bytes(std::vector<hailfire_drivers::FPGAKeyValue> const &bytes);
+std::string dump_bytes(std::vector<hailfire_fpga_proxy::FPGAKeyValue> const &bytes);
 
 /**
  * @class FPGAProxy
@@ -88,12 +88,12 @@ private:
    * Length, Value encoded byte array), sends it to the FPGA via SPI and
    * transforms the FPGA response back to a ROS format.
    */
-  bool doTransfer(hailfire_drivers::FPGATransfer::Request &req,
-                  hailfire_drivers::FPGATransfer::Response &res);
+  bool doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
+                  hailfire_fpga_proxy::FPGATransfer::Response &res);
 
   ros::NodeHandle nh_;                      /**< The ROS node handle */
   ros::ServiceServer srv_;                  /**< The ROS service handle */
-  hailfire_drivers::SPIDevice *spi_device_; /**< The SPI device instance */
+  hailfire_fpga_proxy::SPIDevice *spi_device_; /**< The SPI device instance */
 };
 
 FPGAProxy::FPGAProxy()
@@ -113,7 +113,7 @@ FPGAProxy::FPGAProxy()
   else
   {
     ROS_INFO("SPI device: %s", dev_name.c_str());
-    spi_device_ = new hailfire_drivers::SPIDevice(dev_name.c_str());
+    spi_device_ = new hailfire_fpga_proxy::SPIDevice(dev_name.c_str());
   }
 
   int mode;
@@ -156,8 +156,8 @@ FPGAProxy::~FPGAProxy()
   }
 }
 
-bool FPGAProxy::doTransfer(hailfire_drivers::FPGATransfer::Request &req,
-                           hailfire_drivers::FPGATransfer::Response &res)
+bool FPGAProxy::doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
+                           hailfire_fpga_proxy::FPGATransfer::Response &res)
 {
   ROS_INFO("doTransfer");
 
@@ -206,7 +206,7 @@ bool FPGAProxy::doTransfer(hailfire_drivers::FPGATransfer::Request &req,
   unsigned int rx_offset = 0;
   for (unsigned int i = 0; i < req.pairs.size(); ++i)
   {
-    hailfire_drivers::FPGAKeyValue pair_i;
+    hailfire_fpga_proxy::FPGAKeyValue pair_i;
 
     // Key
     pair_i.key = req.pairs[i].key;
@@ -252,7 +252,7 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes)
   return ss.str();
 }
 
-std::string dump_bytes(std::vector<hailfire_drivers::FPGAKeyValue> const &bytes)
+std::string dump_bytes(std::vector<hailfire_fpga_proxy::FPGAKeyValue> const &bytes)
 {
   std::stringstream ss;
   ss << std::setfill('0');

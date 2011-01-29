@@ -28,8 +28,8 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
-#include <hailfire_drivers/FPGAKeyValue.h>
-#include <hailfire_drivers/FPGATransfer.h>
+#include <hailfire_fpga_proxy/FPGAKeyValue.h>
+#include <hailfire_fpga_proxy/FPGATransfer.h>
 
 namespace hailfire_base_controller
 {
@@ -154,7 +154,7 @@ BaseController::BaseController(void)
 
   // Creates client for fpga_proxy service. Waits until that service is available.
   ROS_INFO("Connecting to fpga_proxy service");
-  srv_client_ = nh_.serviceClient<hailfire_drivers::FPGATransfer>("fpga_proxy");
+  srv_client_ = nh_.serviceClient<hailfire_fpga_proxy::FPGATransfer>("fpga_proxy");
   srv_client_.waitForExistence();
 
   // Subscribe to cmd_vel topic (we still have the time to configure the angle
@@ -201,37 +201,37 @@ void BaseController::configureAngleControlSystem()
     exit(1);
   }
 
-  hailfire_drivers::FPGATransfer transfer;
-  hailfire_drivers::FPGAKeyValue pair;
+  hailfire_fpga_proxy::FPGATransfer transfer;
+  hailfire_fpga_proxy::FPGAKeyValue pair;
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_MAX_ACCELERATION;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_MAX_ACCELERATION;
   pair.value.clear();
   pair.value.push_back((max_acceleration >> 8) & 0xFF);
   pair.value.push_back((max_acceleration >> 0) & 0xFF);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_MAX_DECELERATION;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_MAX_DECELERATION;
   pair.value.clear();
   pair.value.push_back((max_deceleration >> 8) & 0xFF);
   pair.value.push_back((max_deceleration >> 0) & 0xFF);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_P;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_P;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_p);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_I;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_I;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_i);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_D;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_D;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_d);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_CORRECT_FILTER_OUT_SHIFT;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_OUT_SHIFT;
   pair.value.clear();
   pair.value.push_back(correct_filter_out_shift);
   transfer.request.pairs.push_back(pair);
@@ -283,37 +283,37 @@ void BaseController::configureDistanceControlSystem()
     exit(1);
   }
 
-  hailfire_drivers::FPGATransfer transfer;
-  hailfire_drivers::FPGAKeyValue pair;
+  hailfire_fpga_proxy::FPGATransfer transfer;
+  hailfire_fpga_proxy::FPGAKeyValue pair;
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_MAX_ACCELERATION;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_MAX_ACCELERATION;
   pair.value.clear();
   pair.value.push_back((max_acceleration >> 8) & 0xFF);
   pair.value.push_back((max_acceleration >> 0) & 0xFF);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_MAX_DECELERATION;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_MAX_DECELERATION;
   pair.value.clear();
   pair.value.push_back((max_deceleration >> 8) & 0xFF);
   pair.value.push_back((max_deceleration >> 0) & 0xFF);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_P;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_P;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_p);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_I;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_I;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_i);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_D;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_D;
   pair.value.clear();
   pair.value.push_back(correct_filter_gain_d);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_CORRECT_FILTER_OUT_SHIFT;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_OUT_SHIFT;
   pair.value.clear();
   pair.value.push_back(correct_filter_out_shift);
   transfer.request.pairs.push_back(pair);
@@ -338,10 +338,10 @@ void BaseController::twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd)
   int distance_consign = linearOdometerTicksFromRealWorldUnits(cmd->linear.x);
 
   // Send to FPGA
-  hailfire_drivers::FPGATransfer transfer;
-  hailfire_drivers::FPGAKeyValue pair;
+  hailfire_fpga_proxy::FPGATransfer transfer;
+  hailfire_fpga_proxy::FPGAKeyValue pair;
 
-  pair.key = hailfire_drivers::FPGAKeyValue::ANGLE_SPEED_CONSIGN;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_SPEED_CONSIGN;
   pair.value.clear();
   pair.value.push_back((angle_consign >> 24) & 0xFF);
   pair.value.push_back((angle_consign >> 16) & 0xFF);
@@ -349,7 +349,7 @@ void BaseController::twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd)
   pair.value.push_back((angle_consign >> 0) & 0xFF);
   transfer.request.pairs.push_back(pair);
 
-  pair.key = hailfire_drivers::FPGAKeyValue::DISTANCE_SPEED_CONSIGN;
+  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_SPEED_CONSIGN;
   pair.value.clear();
   pair.value.push_back((distance_consign >> 24) & 0xFF);
   pair.value.push_back((distance_consign >> 16) & 0xFF);

@@ -26,13 +26,13 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef HAILFIRE_DRIVERS_SPI_DEVICE_H
-#define HAILFIRE_DRIVERS_SPI_DEVICE_H
+#ifndef HAILFIRE_FPGA_PROXY_SPI_DEVICE_H
+#define HAILFIRE_FPGA_PROXY_SPI_DEVICE_H
 
 #include <linux/spi/spidev.h>
 #include <stdint.h>
 
-namespace hailfire_drivers
+namespace hailfire_fpga_proxy
 {
 
 /**
