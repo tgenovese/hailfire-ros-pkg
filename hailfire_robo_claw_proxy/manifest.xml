@@ -1,0 +1,17 @@
+<package>
+  <description brief="hailfire_robo_claw_proxy">
+
+     hailfire_robo_claw_proxy
+
+  </description>
+  <author>Thierry Genovese</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire_robo_claw_proxy</url>
+  <depend package="cereal_port"/>
+  <depend package="std_msgs"/>
+  <depend package="roscpp"/>
+
+</package>
+
+
