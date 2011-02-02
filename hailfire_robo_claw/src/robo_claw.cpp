@@ -27,12 +27,11 @@
  */
 
 #include "hailfire_robo_claw/robo_claw.h"
-#include <ros/assert.h>
 
 namespace hailfire_robo_claw
 {
 
-RoboClaw::RoboClaw(const char *dev_name, int baud_rate, uint8_t address) : address_(address)
+RoboClaw::RoboClaw(const char *dev_name, speed_t baud_rate, uint8_t address) : address_(address)
 {
   dev_.open(dev_name, baud_rate);
 }

@@ -31,6 +31,7 @@
 
 #include <cereal_port/CerealPort.h>
 #include <stdint.h>
+#include <termios.h>
 
 namespace hailfire_robo_claw
 {
@@ -51,13 +52,13 @@ public:
    * @brief Constructor
    * @param dev_name  The name of the serial device file (eg: "/dev/tty.USB1")
    * @param baud_rate The baud rate to use, configured on the board with DIP
-   *                  switches. Valid baud rates are: 2400, 9600, 19200, 38400.
+   *                  switches. Valid baud rates are: B2400, B9600, B19200, B38400.
    * @param address   The address to use, configured on the board with DIP
    *                  switches (multiple Robo Claw boards could share the same
    *                  bus, although we don't support this). Valid addresses
    *                  are: 128 to 135 (included).
    */
-  RoboClaw(const char *dev_name, int baud_rate, uint8_t address);
+  RoboClaw(const char *dev_name, speed_t baud_rate, uint8_t address);
 
   /**
    * @brief Destructor: cleans up
