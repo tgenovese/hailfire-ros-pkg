@@ -28,18 +28,35 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
-#include <hailfire_fpga_proxy/FPGAKeyValue.h>
-#include <hailfire_fpga_proxy/FPGATransfer.h>
+#include "hailfire_robo_claw/robo_claw.h"
 
 namespace hailfire_base_controller
 {
+
+struct MotorParams
+{
+  int id;
+  struct
+  {
+    int p;
+    int i;
+    int d;
+    int qpps;
+  } gains;
+};
+
+struct EncoderParams
+{
+  int id;
+  double gain;
+};
 
 /**
  * @class BaseController
  * @brief Message subscriber node class listening to velocity commands.
  *
- * This class subscribes to velocity command messages and converts them to
- * calls to the fpga_proxy service.
+ * This class subscribes to velocity command messages and uses the RoboClaw
+ * C++ API (hailfire_robo_claw package) to drive the left and right motors.
  */
 class BaseController
 {
@@ -53,318 +70,246 @@ public:
    * Upon creation, the following parameters are fetched from the parameter
    * server:
    *
-   * ~odometer_imp_per_m
-   * ~odometer_track_m
+   * To create the RoboClaw instance:
+   * ~robo_claw/dev_name        Name of the serial device file
+   * ~robo_claw/baud_rate       Baud rate to use
+   * ~robo_claw/address         Address of the RoboClaw on the bus
    *
+   * For the left motor:
+   * ~left_motor/id             Identifier (1 or 2) of the left motor
+   * ~left_motor/gains/p        Proportional gain of the left PID
+   * ~left_motor/gains/i        Integral gain of the left PID
+   * ~left_motor/gains/d        Derivate gain of the left PID
+   * ~left_motor/gains/qpps     Speed of the motor at 100% power in ticks/s
+   *
+   * For the right motor:
+   * ~right_motor/id            Identifier (1 or 2) of the right motor
+   * ~right_motor/gains/p       Proportional gain of the right PID
+   * ~right_motor/gains/i       Integral gain of the right PID
+   * ~right_motor/gains/d       Derivate gain of the right PID
+   * ~right_motor/gains/qpps    Speed of the motor at 100% power in ticks/s
+   *
+   * For both motors:
+   * ~motors_max_vel_qpps       Maximum allowed velocity in ticks/s
+   * ~motors_max_acc_qpps2      Maximum allowed acceleration in ticks/s^2
+   *
+   * For the left encoder:
+   * ~left_encoder/id           Identifier (1 or 2) of the left encoder
+   * ~left_encoder/gain         Corrective gain for the left encoder
+   *
+   * For the right encoder:
+   * ~right_encoder/id          Identifier (1 or 2) of the right encoder
+   * ~right_encoder/gain        Corrective gain for the right encoder
+   *
+   * For both encoders:
+   * ~encoders_ticks_per_m      Number of encoder ticks per m
+   * ~encoders_track_m          Length between encoders in m
    */
   BaseController();
 
   /**
-   * @brief Configures the angle control system in the FPGA.
-   *
-   * The following parameters are fetched from the parameter server and are
-   * used to configure the angle control systems implemented in the FPGA:
-   *
-   * ~angle_cs/max_acceleration
-   * ~angle_cs/max_deceleration
-   * ~angle_cs/correct_filter_gain_p
-   * ~angle_cs/correct_filter_gain_i
-   * ~angle_cs/correct_filter_gain_d
-   * ~angle_cs/correct_filter_out_shift
-   *
-   * The max_acceleration and max_deceleration params are converted from real-
-   * world units to odometer ticks before being sent to the FPGA.
-   *
+   * @brief Destructor: cleans up
    */
-  void configureAngleControlSystem();
-
-  /**
-   * @brief Configures the distance control system in the FPGA.
-   *
-   * The following parameters are fetched from the parameter server and are
-   * used to configure the distance control systems implemented in the FPGA:
-   *
-   * ~distance_cs/max_acceleration
-   * ~distance_cs/max_deceleration
-   * ~distance_cs/correct_filter_gain_p
-   * ~distance_cs/correct_filter_gain_i
-   * ~distance_cs/correct_filter_gain_d
-   * ~distance_cs/correct_filter_out_shift
-   *
-   * The max_acceleration and max_deceleration params are converted from real-
-   * world units to odometer ticks before being sent to the FPGA.
-   *
-   */
-  void configureDistanceControlSystem();
+  ~BaseController();
 
 private:
+
+  /**
+   * @brief Create the RoboClaw instance from ROS parameters.
+   */
+  void createRoboClawFromParams(ros::NodeHandle nh_param);
+
+  /**
+   * @brief Configure a motor from ROS parameters.
+   */
+  void configureMotorFromParams(ros::NodeHandle nh_param, MotorParams *out);
+
+  /**
+   * @brief Configure an encoder from ROS parameters.
+   */
+  void configureEncoderFromParams(ros::NodeHandle nh_param, EncoderParams *out);
 
   /**
    * @brief Message handler.
    *
    * This method is called by ROS when a message is published on the cmd_vel
-   * topic. It transforms the received geometry_msgs/Twist message in an
-   * fpga_proxy service call.
-   *
-   * The angular and linear velocity commands are converted from real-world
-   * units to odometer ticks before being sent to the FPGA.
+   * topic. It transforms the received geometry_msgs/Twist message in a call to
+   * the driveMotorsWithSpeedAndAcceleration method of the RoboClaw instance.
    *
    */
   void twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd);
 
-  /**
-   * @brief Converts from real-world angular units to odometer ticks.
-   */
-  int angularOdometerTicksFromRealWorldUnits(double const &val)
-  {
-    return odometer_imp_per_m_ * odometer_track_m_ * val / 2;
-  }
-
-  /**
-   * @brief Converts from real-world linear units to odometer ticks.
-   */
-  int linearOdometerTicksFromRealWorldUnits(double const &val)
-  {
-    return odometer_imp_per_m_ * val;
-  }
-
   ros::NodeHandle nh_;              /**< The ROS node handle */
-  ros::ServiceClient srv_client_;   /**< The ROS service client for fpga_proxy service */
   ros::Subscriber msg_sub_;         /**< The ROS subscriber to Twist messages */
 
-  double odometer_imp_per_m_;       /**< Number of odometer ticks per robot meter */
-  double odometer_track_m_;         /**< Length between odometers in meters */
+  hailfire_robo_claw::RoboClaw *robo_claw_;     /**< The RoboClaw instance */
+
+  MotorParams left_motor_;          /**< Params of the left motor */
+  MotorParams right_motor_;         /**< Params of the right motor */
+
+  int motors_max_vel_qpps_;         /**< Max allowed velocity in ticks/s */
+  int motors_max_acc_qpps2_;        /**< Max allowed acceleration in ticks/s^2 */
+
+  EncoderParams left_encoder_;      /**< Params of the left encoder */
+  EncoderParams right_encoder_;     /**< Params of the right encoder */
+
+  double encoders_ticks_per_m_;     /**< Number of encoder ticks per m */
+  double encoders_track_m_;         /**< Length between encoders in m */
 };
 
 BaseController::BaseController(void)
 {
-  // Get odometer params
+  ros::NodeHandle nh_robo_claw_param("~robo_claw");
+  createRoboClawFromParams(nh_robo_claw_param);
+
+  ros::NodeHandle nh_left_motor_param("~left_motor");
+  configureMotorFromParams(nh_left_motor_param, &left_motor_);
+
+  ros::NodeHandle nh_right_motor_param("~right_motor");
+  configureMotorFromParams(nh_right_motor_param, &right_motor_);
+
+  ros::NodeHandle nh_left_encoder_param("~left_encoder");
+  configureEncoderFromParams(nh_left_encoder_param, &left_encoder_);
+
+  ros::NodeHandle nh_right_encoder_param("~right_encoder");
+  configureEncoderFromParams(nh_right_encoder_param, &right_encoder_);
+
+  // Get other params
   ros::NodeHandle nh_param("~");
-  if (nh_param.getParam("odometer_imp_per_m", odometer_imp_per_m_) &&
-      nh_param.getParam("odometer_track_m", odometer_track_m_))
+
+  if (!nh_param.getParam("motors_max_vel_qpps", motors_max_vel_qpps_) ||
+      !nh_param.getParam("motors_max_acc_qpps2", motors_max_acc_qpps2_))
   {
-    ROS_INFO("Will use odometer_imp_per_m: %f", odometer_imp_per_m_);
-    ROS_INFO("Will set odometer_track_m: %f", odometer_track_m_);
-  }
-  else
-  {
-    ROS_ERROR("Failed to retrieve all odometer parameters.");
+    ROS_ERROR("Failed to retrieve all motors parameters.");
     exit(1);
   }
 
-  // Creates client for fpga_proxy service. Waits until that service is available.
-  ROS_INFO("Connecting to fpga_proxy service");
-  srv_client_ = nh_.serviceClient<hailfire_fpga_proxy::FPGATransfer>("fpga_proxy");
-  srv_client_.waitForExistence();
+  if (!nh_param.getParam("encoders_ticks_per_m", encoders_ticks_per_m_) ||
+      !nh_param.getParam("encoders_track_m", encoders_track_m_))
+  {
+    ROS_ERROR("Failed to retrieve all encoders parameters.");
+    exit(1);
+  }
 
-  // Subscribe to cmd_vel topic (we still have the time to configure the angle
-  // and distance control systems since ros::spin() hasn't been called yet).
+  // Subscribe to cmd_vel topic
   ROS_INFO("Subscribing to cmd_vel topic");
   msg_sub_ = nh_.subscribe("cmd_vel", 1, &BaseController::twistMsgHandler, this);
 
   ROS_INFO("Ready to handle velocity commands");
 }
 
-void BaseController::configureAngleControlSystem()
+BaseController::~BaseController()
 {
-  ros::NodeHandle nh_param("~angle_cs");
-
-  double max_acceleration_d;
-  double max_deceleration_d;
-  int max_acceleration;
-  int max_deceleration;
-  int correct_filter_gain_p;
-  int correct_filter_gain_i;
-  int correct_filter_gain_d;
-  int correct_filter_out_shift;
-
-  if (nh_param.getParam("max_acceleration", max_acceleration_d) &&
-      nh_param.getParam("max_deceleration", max_deceleration_d) &&
-      nh_param.getParam("correct_filter_gain_p", correct_filter_gain_p) &&
-      nh_param.getParam("correct_filter_gain_i", correct_filter_gain_i) &&
-      nh_param.getParam("correct_filter_gain_d", correct_filter_gain_d) &&
-      nh_param.getParam("correct_filter_out_shift", correct_filter_out_shift))
+  if (robo_claw_)
   {
-    max_acceleration = angularOdometerTicksFromRealWorldUnits(max_acceleration_d);
-    max_deceleration = angularOdometerTicksFromRealWorldUnits(max_deceleration_d);
-
-    ROS_INFO("Will set angle max_acceleration: %u", max_acceleration);
-    ROS_INFO("Will set angle max_deceleration: %u", max_deceleration);
-    ROS_INFO("Will set angle correct_filter_gain_p: %u", correct_filter_gain_p);
-    ROS_INFO("Will set angle correct_filter_gain_i: %u", correct_filter_gain_i);
-    ROS_INFO("Will set angle correct_filter_gain_d: %u", correct_filter_gain_d);
-    ROS_INFO("Will set angle correct_filter_out_shift: %u", correct_filter_out_shift);
-  }
-  else
-  {
-    ROS_ERROR("Failed to retrieve all angle control system parameters.");
-    exit(1);
-  }
-
-  hailfire_fpga_proxy::FPGATransfer transfer;
-  hailfire_fpga_proxy::FPGAKeyValue pair;
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_MAX_ACCELERATION;
-  pair.value.clear();
-  pair.value.push_back((max_acceleration >> 8) & 0xFF);
-  pair.value.push_back((max_acceleration >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_MAX_DECELERATION;
-  pair.value.clear();
-  pair.value.push_back((max_deceleration >> 8) & 0xFF);
-  pair.value.push_back((max_deceleration >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_P;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_p);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_I;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_i);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_GAIN_D;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_d);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_CORRECT_FILTER_OUT_SHIFT;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_out_shift);
-  transfer.request.pairs.push_back(pair);
-
-  if (srv_client_.call(transfer))
-  {
-    ROS_INFO("Configured angle control system");
-  }
-  else
-  {
-    ROS_ERROR("Failed to configure angle control system");
-    exit(1);
+    delete robo_claw_;
   }
 }
 
-void BaseController::configureDistanceControlSystem()
+void BaseController::createRoboClawFromParams(ros::NodeHandle nh_param)
 {
-  ros::NodeHandle nh_param("~distance_cs");
-
-  double max_acceleration_d;
-  double max_deceleration_d;
-  int max_acceleration;
-  int max_deceleration;
-  int correct_filter_gain_p;
-  int correct_filter_gain_i;
-  int correct_filter_gain_d;
-  int correct_filter_out_shift;
-
-  if (nh_param.getParam("max_acceleration", max_acceleration_d) &&
-      nh_param.getParam("max_deceleration", max_deceleration_d) &&
-      nh_param.getParam("correct_filter_gain_p", correct_filter_gain_p) &&
-      nh_param.getParam("correct_filter_gain_i", correct_filter_gain_i) &&
-      nh_param.getParam("correct_filter_gain_d", correct_filter_gain_d) &&
-      nh_param.getParam("correct_filter_out_shift", correct_filter_out_shift))
+  // Should we proceed with the creation of the RoboClaw instance?
+  bool inhibit;
+  nh_param.param("inhibit", inhibit, false);
+  if (inhibit)
   {
-    max_acceleration = linearOdometerTicksFromRealWorldUnits(max_acceleration_d);
-    max_deceleration = linearOdometerTicksFromRealWorldUnits(max_deceleration_d);
-  
-    ROS_INFO("Will set distance max_acceleration: %u", max_acceleration);
-    ROS_INFO("Will set distance max_deceleration: %u", max_deceleration);
-    ROS_INFO("Will set distance correct_filter_gain_p: %u", correct_filter_gain_p);
-    ROS_INFO("Will set distance correct_filter_gain_i: %u", correct_filter_gain_i);
-    ROS_INFO("Will set distance correct_filter_gain_d: %u", correct_filter_gain_d);
-    ROS_INFO("Will set distance correct_filter_out_shift: %u", correct_filter_out_shift);
+    ROS_INFO("~robo_claw/inhibit set: RoboClaw instance will not be created");
+    robo_claw_ = NULL;
+    return;
   }
-  else
+
+  // Get params
+  std::string dev_name;
+  int baud_rate_int;
+  int address;
+
+  if (!nh_param.getParam("dev_name", dev_name) ||
+      !nh_param.getParam("baud_rate", baud_rate_int) ||
+      !nh_param.getParam("address", address))
   {
-    ROS_ERROR("Failed to retrieve all distance control system parameters.");
+    ROS_ERROR("Failed to retrieve all RoboClaw parameters.");
     exit(1);
   }
 
-  hailfire_fpga_proxy::FPGATransfer transfer;
-  hailfire_fpga_proxy::FPGAKeyValue pair;
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_MAX_ACCELERATION;
-  pair.value.clear();
-  pair.value.push_back((max_acceleration >> 8) & 0xFF);
-  pair.value.push_back((max_acceleration >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_MAX_DECELERATION;
-  pair.value.clear();
-  pair.value.push_back((max_deceleration >> 8) & 0xFF);
-  pair.value.push_back((max_deceleration >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_P;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_p);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_I;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_i);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_GAIN_D;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_gain_d);
-  transfer.request.pairs.push_back(pair);
-
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_CORRECT_FILTER_OUT_SHIFT;
-  pair.value.clear();
-  pair.value.push_back(correct_filter_out_shift);
-  transfer.request.pairs.push_back(pair);
-
-  if (srv_client_.call(transfer))
+  // Validate baud rate and get actual constant
+  speed_t baud_rate;
+  switch (baud_rate_int)
   {
-    ROS_INFO("Configured distance control system");
+    case 2400:
+      baud_rate = B2400;
+      break;
+    case 9600:
+      baud_rate = B9600;
+      break;
+    case 19200:
+      baud_rate = B19200;
+      break;
+    case 38400:
+      baud_rate = B38400;
+      break;
+    default:
+      ROS_ERROR("Unsupported baud rate: %u", baud_rate_int);
+      exit(1);
   }
-  else
+
+  robo_claw_ = new hailfire_robo_claw::RoboClaw(dev_name.c_str(), baud_rate, address);
+}
+
+void BaseController::configureMotorFromParams(ros::NodeHandle nh_param, MotorParams *out)
+{
+  // Get params
+  if (!nh_param.getParam("id", out->id) ||
+      !nh_param.getParam("gains/p", out->gains.p) ||
+      !nh_param.getParam("gains/i", out->gains.i) ||
+      !nh_param.getParam("gains/d", out->gains.d) ||
+      !nh_param.getParam("gains/qpps", out->gains.qpps))
   {
-    ROS_ERROR("Failed to configure distance control system");
+    ROS_ERROR("Failed to retrieve all motor parameters.");
+    exit(1);
+  }
+
+  // Apply PID settings
+  if (robo_claw_)
+  {
+    robo_claw_->setPIDConstants(out->id, out->gains.p, out->gains.i, out->gains.d, out->gains.qpps);
+  }
+}
+
+void BaseController::configureEncoderFromParams(ros::NodeHandle nh_param, EncoderParams *out)
+{
+  // Get params
+  if (!nh_param.getParam("id", out->id) ||
+      !nh_param.getParam("gain", out->gain))
+  {
+    ROS_ERROR("Failed to retrieve all encoder parameters.");
     exit(1);
   }
 }
 
 void BaseController::twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd)
 {
-  // Converts rad/s to ticks/s
-  int angle_consign = angularOdometerTicksFromRealWorldUnits(cmd->angular.z);
+  // Converts rad/s and m/s to ticks/s
+  int angular_consign = encoders_ticks_per_m_ * encoders_track_m_ * cmd->angular.z / 2;
+  int linear_consign  = encoders_ticks_per_m_ * cmd->linear.x;
 
-  // Converts m/s to ticks/s
-  int distance_consign = linearOdometerTicksFromRealWorldUnits(cmd->linear.x);
+  // Compute left/right consigns from angular/linear consigns
+  int left_consign  = linear_consign - angular_consign;
+  int right_consign = linear_consign + angular_consign;
 
-  // Send to FPGA
-  hailfire_fpga_proxy::FPGATransfer transfer;
-  hailfire_fpga_proxy::FPGAKeyValue pair;
+  // Compute motor1/motor2 consigns from left/right consigns
+  int speed_m1 = (left_motor_.id == 1 ? left_consign : right_consign);
+  int speed_m2 = (right_motor_.id == 2 ? right_consign : left_consign);
 
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::ANGLE_SPEED_CONSIGN;
-  pair.value.clear();
-  pair.value.push_back((angle_consign >> 24) & 0xFF);
-  pair.value.push_back((angle_consign >> 16) & 0xFF);
-  pair.value.push_back((angle_consign >> 8) & 0xFF);
-  pair.value.push_back((angle_consign >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
+  // Crop speeds
+  speed_m1 = (speed_m1 > +motors_max_vel_qpps_ ? +motors_max_vel_qpps_ : speed_m1);
+  speed_m1 = (speed_m1 < -motors_max_vel_qpps_ ? -motors_max_vel_qpps_ : speed_m1);
+  speed_m2 = (speed_m2 > +motors_max_vel_qpps_ ? +motors_max_vel_qpps_ : speed_m2);
+  speed_m2 = (speed_m2 < -motors_max_vel_qpps_ ? -motors_max_vel_qpps_ : speed_m2);
 
-  pair.key = hailfire_fpga_proxy::FPGAKeyValue::DISTANCE_SPEED_CONSIGN;
-  pair.value.clear();
-  pair.value.push_back((distance_consign >> 24) & 0xFF);
-  pair.value.push_back((distance_consign >> 16) & 0xFF);
-  pair.value.push_back((distance_consign >> 8) & 0xFF);
-  pair.value.push_back((distance_consign >> 0) & 0xFF);
-  transfer.request.pairs.push_back(pair);
-
-  if (srv_client_.call(transfer))
+  // Send to RoboClaw
+  if (robo_claw_)
   {
-    ROS_DEBUG("Sent angle (%d) and distance (%d) consigns to the fpga_proxy", angle_consign, distance_consign);
-  }
-  else
-  {
-    ROS_ERROR("Failed to send angle and distance consigns to the fpga_proxy");
-    exit(1);
+    robo_claw_->driveMotorsWithSpeedAndAcceleration(speed_m1, speed_m2, motors_max_acc_qpps2_);
   }
 }
 
@@ -375,8 +320,6 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "base_controller");
 
   hailfire_base_controller::BaseController base_controller;
-  base_controller.configureAngleControlSystem();
-  base_controller.configureDistanceControlSystem();
 
   ros::spin();
 

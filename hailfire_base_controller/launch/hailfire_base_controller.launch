@@ -2,24 +2,40 @@
 <launch>
   <!-- Launches the hailfire_base_controller/base_controller node with suitable params -->
   <node name="base_controller" pkg="hailfire_base_controller" type="base_controller" required="true" output="screen">
-    <!-- Odometer params -->
-    <param name="odometer_imp_per_m" type="double" value="60000"/>
-    <param name="odometer_track_m" type="double" value="0.20"/>
+    <!-- RoboClaw params -->
+<!--     <param name="robo_claw/inhibit" type="bool" value="true"/> -->
+    <param name="robo_claw/dev_name" type="str" value="/dev/tty.USB0"/>
+    <param name="robo_claw/baud_rate" type="int" value="38400"/>
+    <param name="robo_claw/address" type="int" value="128"/>
 
-    <!-- Angle control system params -->
-    <param name="angle_cs/max_acceleration" type="double" value="0.5"/>
-    <param name="angle_cs/max_deceleration" type="double" value="0.5"/>
-    <param name="angle_cs/correct_filter_gain_p" type="int" value="1"/>
-    <param name="angle_cs/correct_filter_gain_i" type="int" value="0"/>
-    <param name="angle_cs/correct_filter_gain_d" type="int" value="0"/>
-    <param name="angle_cs/correct_filter_out_shift" type="int" value="0"/>
+    <!-- Left motor params -->
+    <param name="left_motor/id" type="int" value="1"/>
+    <param name="left_motor/gains/p" type="int" value="512"/>
+    <param name="left_motor/gains/i" type="int" value="256"/>
+    <param name="left_motor/gains/d" type="int" value="128"/>
+    <param name="left_motor/gains/qpps" type="int" value="44000"/>
 
-    <!-- Distance control system params -->
-    <param name="distance_cs/max_acceleration" type="double" value="0.5"/>
-    <param name="distance_cs/max_deceleration" type="double" value="0.5"/>
-    <param name="distance_cs/correct_filter_gain_p" type="int" value="1"/>
-    <param name="distance_cs/correct_filter_gain_i" type="int" value="0"/>
-    <param name="distance_cs/correct_filter_gain_d" type="int" value="0"/>
-    <param name="distance_cs/correct_filter_out_shift" type="int" value="0"/>
+    <!-- Right motor params -->
+    <param name="right_motor/id" type="int" value="2"/>
+    <param name="right_motor/gains/p" type="int" value="512"/>
+    <param name="right_motor/gains/i" type="int" value="256"/>
+    <param name="right_motor/gains/d" type="int" value="128"/>
+    <param name="right_motor/gains/qpps" type="int" value="44000"/>
+
+    <!-- Common motor params -->
+    <param name="motors_max_vel_qpps" type="int" value="44000"/>
+    <param name="motors_max_acc_qpps2" type="int" value="4400"/>
+
+    <!-- Left encoder params -->
+    <param name="left_encoder/id" type="int" value="1"/>
+    <param name="left_encoder/gain" type="double" value="1.0"/>
+
+    <!-- Right encoder params -->
+    <param name="right_encoder/id" type="int" value="2"/>
+    <param name="right_encoder/gain" type="double" value="1.0"/>
+
+    <!-- Common encoder params -->
+    <param name="encoders_ticks_per_m" type="double" value="60000"/>
+    <param name="encoders_track_m" type="double" value="0.20"/>
   </node>
 </launch>
