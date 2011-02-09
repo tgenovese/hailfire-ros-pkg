@@ -31,7 +31,6 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 # Build librobo_claw
 rosbuild_add_library(${PROJECT_NAME} src/robo_claw.cpp)
-target_link_libraries(${PROJECT_NAME} cereal_port)
 
 # Build test_robo_claw executable
 rosbuild_add_executable(test_robo_claw test/test_robo_claw.cpp)
