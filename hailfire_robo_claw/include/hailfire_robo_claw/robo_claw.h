@@ -328,20 +328,22 @@ private:
 
   /**
    * @brief Computes the CRC byte for Robo Claw.
-   * @param bytes    An array of bytes (address, command, params)
+   * @param command  The command id
+   * @param bytes    An array of bytes (params of the command)
    * @param nb_bytes The number of bytes to consider in the array
    * @return the CRC byte (more like a checksum really).
    */
-  uint8_t computeCRC(uint8_t *bytes, unsigned int nb_bytes);
+  uint8_t computeCRC(uint8_t command, uint8_t *bytes, unsigned int nb_bytes);
 
   /**
    * @brief Checks the given CRC against the CRC of the given bytes.
-   * @param bytes    An array of bytes
+   * @param command  The command id
+   * @param bytes    An array of bytes (results of the command)
    * @param nb_bytes The number of bytes to consider in the array
    * @param crc      The expected value of the CRC
    * @return true if the CRCs match, false otherwise.
    */
-  bool checkCRC(uint8_t *bytes, unsigned int nb_bytes, uint8_t crc);
+  bool checkCRC(uint8_t command, uint8_t *bytes, unsigned int nb_bytes, uint8_t crc);
 
   cereal::CerealPort dev_; /**< The serial port to the Robo Claw */
   uint8_t address_;        /**< The address of the Robo Claw */

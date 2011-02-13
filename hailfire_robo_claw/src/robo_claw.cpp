@@ -106,7 +106,7 @@ void RoboClaw::resetEncoders()
   uint8_t bytes[3];
   bytes[0] = address_;
   bytes[1] = command;
-  bytes[2] = computeCRC(bytes, 2);
+  bytes[2] = computeCRC(command, &bytes[2], 0);
 
   dev_.write((char *)bytes, 3);
 }
@@ -139,7 +139,7 @@ void RoboClaw::setPIDConstants(uint8_t motor, uint32_t p, uint32_t i, uint32_t d
   bytes[16] = (qpps >> 8) & 0xFF;
   bytes[17] = (qpps >> 0) & 0xFF;
 
-  bytes[18] = computeCRC(bytes, 18);
+  bytes[18] = computeCRC(command, &bytes[2], 16);
 
   dev_.write((char *)bytes, 19);
 }
@@ -170,7 +170,7 @@ void RoboClaw::driveMotorWithDutyCycle(uint8_t motor, int16_t duty_cycle)
   bytes[1] = command;
   bytes[2] = (uduty >> 8) & 0xFF;
   bytes[3] = (uduty >> 0) & 0xFF;
-  bytes[4] = computeCRC(bytes, 4);
+  bytes[4] = computeCRC(command, &bytes[2], 2);
 
   dev_.write((char *)bytes, 5);
 }
@@ -188,7 +188,7 @@ void RoboClaw::driveMotorsWithDutyCycle(int16_t duty_m1, int16_t duty_m2)
   bytes[3] = (uduty_m1 >> 0) & 0xFF;
   bytes[4] = (uduty_m2 >> 8) & 0xFF;
   bytes[5] = (uduty_m2 >> 0) & 0xFF;
-  bytes[6] = computeCRC(bytes, 6);
+  bytes[6] = computeCRC(command, &bytes[2], 4);
 
   dev_.write((char *)bytes, 7);
 }
@@ -205,7 +205,7 @@ void RoboClaw::driveMotorWithSpeed(uint8_t motor, int32_t speed)
   bytes[3] = (uspeed >> 16) & 0xFF;
   bytes[4] = (uspeed >> 8) & 0xFF;
   bytes[5] = (uspeed >> 0) & 0xFF;
-  bytes[6] = computeCRC(bytes, 6);
+  bytes[6] = computeCRC(command, &bytes[2], 4);
 
   dev_.write((char *)bytes, 7);
 }
@@ -230,7 +230,7 @@ void RoboClaw::driveMotorsWithSpeed(int32_t speed_m1, int32_t speed_m2)
   bytes[8] = (uspeed_m2 >> 8) & 0xFF;
   bytes[9] = (uspeed_m2 >> 0) & 0xFF;
 
-  bytes[10] = computeCRC(bytes, 10);
+  bytes[10] = computeCRC(command, &bytes[2], 8);
 
   dev_.write((char *)bytes, 11);
 }
@@ -254,7 +254,7 @@ void RoboClaw::driveMotorWithSpeedAndAcceleration(uint8_t motor, int32_t speed, 
   bytes[8] = (uspeed >> 8) & 0xFF;
   bytes[9] = (uspeed >> 0) & 0xFF;
 
-  bytes[10] = computeCRC(bytes, 10);
+  bytes[10] = computeCRC(command, &bytes[2], 8);
 
   dev_.write((char *)bytes, 11);
 }
@@ -284,7 +284,7 @@ void RoboClaw::driveMotorsWithSpeedAndAcceleration(int32_t speed_m1, int32_t spe
   bytes[12] = (uspeed_m2 >> 8) & 0xFF;
   bytes[13] = (uspeed_m2 >> 0) & 0xFF;
 
-  bytes[14] = computeCRC(bytes, 14);
+  bytes[14] = computeCRC(command, &bytes[2], 12);
 
   dev_.write((char *)bytes, 15);
 }
@@ -382,7 +382,7 @@ void RoboClaw::sendUint8(uint8_t command, uint8_t value)
   bytes[0] = address_;
   bytes[1] = command;
   bytes[2] = value;
-  bytes[3] = computeCRC(bytes, 3);
+  bytes[3] = computeCRC(command, &bytes[2], 1);
 
   dev_.write((char *)bytes, 4);
 }
@@ -396,7 +396,7 @@ bool RoboClaw::readBytes(uint8_t command, uint8_t *bytes, unsigned int nb_bytes)
 
   dev_.readBytes((char *)bytes, nb_bytes);
 
-  return checkCRC(bytes, nb_bytes - 1, bytes[nb_bytes - 1]);
+  return checkCRC(command, bytes, nb_bytes - 1, bytes[nb_bytes - 1]);
 }
 
 bool RoboClaw::readUint16(uint8_t command, uint16_t *value)
@@ -410,9 +410,11 @@ bool RoboClaw::readUint16(uint8_t command, uint16_t *value)
   return false;
 }
 
-uint8_t RoboClaw::computeCRC(uint8_t *bytes, unsigned int nb_bytes)
+uint8_t RoboClaw::computeCRC(uint8_t command, uint8_t *bytes, unsigned int nb_bytes)
 {
   uint8_t crc = 0;
+  crc += address_;
+  crc += command;
   for (unsigned int i = 0; i < nb_bytes; ++i)
   {
     crc += bytes[i];
@@ -422,9 +424,9 @@ uint8_t RoboClaw::computeCRC(uint8_t *bytes, unsigned int nb_bytes)
   return crc;
 }
 
-bool RoboClaw::checkCRC(uint8_t *bytes, unsigned int nb_bytes, uint8_t crc)
+bool RoboClaw::checkCRC(uint8_t command, uint8_t *bytes, unsigned int nb_bytes, uint8_t crc)
 {
-  return computeCRC(bytes, nb_bytes) == crc ? true : false;
+  return computeCRC(command, bytes, nb_bytes) == crc ? true : false;
 }
 
 }
