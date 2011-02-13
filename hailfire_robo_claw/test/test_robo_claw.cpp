@@ -128,16 +128,6 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  std::cout << "Hello World" << std::endl
-            << "Port: " << port << std::endl
-            << "Baud: " << baud << std::endl;
-
-  std::cout << "Remaining args:" << std::endl;
-  for (int i = optind; i < argc; ++i)
-  {
-    std::cout << argv[i] << std::endl;
-  }
-
   // At least 1 non-option argument must be given
   if (optind == argc)
   {
@@ -245,7 +235,7 @@ int main(int argc, char **argv)
     uint8_t motor = atoi(argv[args_idx++]);
     int32_t speed = 0;
 
-    printf("readCurrentSpeed(%u)", motor);
+    printf("readCurrentSpeed(%u)\n", motor);
     bool ret = robo_claw.readCurrentSpeed(motor, &speed);
 
     printf("readCurrentSpeed returned: %s\n", (ret ? "true" : "false"));
