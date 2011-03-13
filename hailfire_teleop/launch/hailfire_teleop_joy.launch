@@ -1,0 +1,19 @@
+<launch>
+  <!-- Launches the joy/joy_node node with suitable params -->
+  <node name="joy_node" pkg="joy" type="joy_node" required="true" output="screen">
+    <param name="dev" type="string" value="/dev/input/js0"/>
+    <param name="deadzone" type="double" value="0.12"/>
+  </node>
+
+  <!-- Launches the hailfire_teleop/teleop_joy node with suitable params -->
+  <node name="teleop_joy" pkg="hailfire_teleop" type="teleop_joy" required="true" output="screen">
+    <!-- Up/down axis of PS3 controller right joystick -->
+    <param name="axis_linear" type="int" value="3"/>
+
+    <!-- Left/right axis of PS3 controller left joystick -->
+    <param name="axis_angular" type="int" value="0"/>
+
+    <param name="scale_linear" type="double" value="2"/>
+    <param name="scale_angular" type="double" value="2"/>
+  </node>
+</launch>
