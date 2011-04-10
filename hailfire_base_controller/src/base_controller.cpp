@@ -28,6 +28,7 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Empty.h>
 #include "hailfire_robo_claw/robo_claw.h"
 
 namespace hailfire_base_controller
@@ -130,7 +131,7 @@ private:
   void configureEncoderFromParams(ros::NodeHandle nh_param, EncoderParams *out);
 
   /**
-   * @brief Message handler.
+   * @brief Twist message handler.
    *
    * This method is called by ROS when a message is published on the cmd_vel
    * topic. It transforms the received geometry_msgs/Twist message in a call to
@@ -139,8 +140,18 @@ private:
    */
   void twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd);
 
+  /**
+   * @brief Stops both motors immediately, regardless of their current speed.
+   *
+   * This method is called by ROS when a message is published on the estop
+   * topic. It stops both motors with a call to the driveMotor method of the
+   * RoboClaw instance.
+   */
+  void hardStop(const std_msgs::Empty::ConstPtr &empty);
+
   ros::NodeHandle nh_;              /**< The ROS node handle */
-  ros::Subscriber msg_sub_;         /**< The ROS subscriber to Twist messages */
+  ros::Subscriber twist_sub_;       /**< The ROS subscriber to velocity command messages */
+  ros::Subscriber estop_sub_;       /**< The ROS subscriber to emergency stop messages */
 
   hailfire_robo_claw::RoboClaw *robo_claw_;     /**< The RoboClaw instance */
 
@@ -193,13 +204,20 @@ BaseController::BaseController(void)
 
   // Subscribe to cmd_vel topic
   ROS_INFO("Subscribing to cmd_vel topic");
-  msg_sub_ = nh_.subscribe("cmd_vel", 1, &BaseController::twistMsgHandler, this);
+  twist_sub_ = nh_.subscribe("cmd_vel", 1, &BaseController::twistMsgHandler, this);
+
+  // Subscribe to estop topic
+  ROS_INFO("Subscribing to estop topic");
+  estop_sub_ = nh_.subscribe("estop", 1, &BaseController::hardStop, this);
 
   ROS_INFO("Ready to handle velocity commands");
 }
 
 BaseController::~BaseController()
 {
+  const std_msgs::Empty::ConstPtr empty;
+  hardStop(empty);
+
   if (robo_claw_)
   {
     delete robo_claw_;
@@ -306,10 +324,23 @@ void BaseController::twistMsgHandler(const geometry_msgs::Twist::ConstPtr &cmd)
   speed_m2 = (speed_m2 > +motors_max_vel_qpps_ ? +motors_max_vel_qpps_ : speed_m2);
   speed_m2 = (speed_m2 < -motors_max_vel_qpps_ ? -motors_max_vel_qpps_ : speed_m2);
 
+  ROS_DEBUG("Commanding m1: %d, m2: %d", speed_m1, speed_m2);
+
   // Send to RoboClaw
   if (robo_claw_)
   {
     robo_claw_->driveMotorsWithSpeedAndAcceleration(speed_m1, speed_m2, motors_max_acc_qpps2_);
+  }
+}
+
+void BaseController::hardStop(const std_msgs::Empty::ConstPtr &empty)
+{
+  ROS_DEBUG("Commanding a hard stop");
+
+  if (robo_claw_)
+  {
+    robo_claw_->driveMotor(left_motor_.id, 0);
+    robo_claw_->driveMotor(right_motor_.id, 0);
   }
 }
 

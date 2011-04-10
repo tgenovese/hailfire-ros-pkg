@@ -9,6 +9,7 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/hailfire_base_controller</url>
   <depend package="geometry_msgs"/>
+  <depend package="std_msgs"/>
   <depend package="hailfire_robo_claw"/>
   <depend package="roscpp"/>
 
