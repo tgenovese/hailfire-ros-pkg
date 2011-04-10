@@ -29,6 +29,7 @@
 #include <ros/ros.h>
 #include <joy/Joy.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Empty.h>
 
 namespace hailfire_teleop_joy
 {
@@ -53,6 +54,7 @@ public:
    * ~teleop_joy/axis_angular   Index of axis to use for angular speed
    * ~teleop_joy/scale_linear   Scale coefficient for linear speed
    * ~teleop_joy/scale_angular  Scale coefficient for angular speed
+   * ~teleop_joy/button_estop   Index of button to use for emergency stop
    */
   TeleopJoy();
 
@@ -69,18 +71,21 @@ private:
   void joyCallback(const joy::Joy::ConstPtr &joy);
 
   ros::NodeHandle nh_;          /**< The ROS node handle */
-  ros::Publisher vel_pub_;      /**< The ROS publisher of Twist messages */
+  ros::Publisher twist_pub_;    /**< The ROS publisher of velocity command messages */
+  ros::Publisher estop_pub_;    /**< The ROS publisher of emergency stop messages */
   ros::Subscriber joy_sub_;     /**< The ROS subscriber to Joy messages */
 
   int linear_, angular_;        /**< Index of axis to use for linear and angular speeds */
   double l_scale_, a_scale_;    /**< Scale coefficient for linear and angular speeds */
+  int estop_;                   /**< Index of button to use for emergency stop */
 };
 
 TeleopJoy::TeleopJoy():
   linear_(1),
   angular_(2),
   l_scale_(1.0),
-  a_scale_(1.0)
+  a_scale_(1.0),
+  estop_(1)
 {
   ros::NodeHandle nh_param("~");
 
@@ -88,8 +93,10 @@ TeleopJoy::TeleopJoy():
   nh_param.param("axis_angular", angular_, angular_);
   nh_param.param("scale_angular", a_scale_, a_scale_);
   nh_param.param("scale_linear", l_scale_, l_scale_);
+  nh_param.param("button_estop", estop_, estop_);
 
-  vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
+  twist_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 10);
+  estop_pub_ = nh_.advertise<std_msgs::Empty>("estop", 10);
   joy_sub_ = nh_.subscribe("joy", 10, &TeleopJoy::joyCallback, this);
 }
 
@@ -102,7 +109,14 @@ void TeleopJoy::joyCallback(const joy::Joy::ConstPtr &joy)
   cmd.angular.x = 0;
   cmd.angular.y = 0;
   cmd.angular.z = a_scale_ * joy->axes[angular_];
-  vel_pub_.publish(cmd);
+  twist_pub_.publish(cmd);
+
+  if (joy->buttons[estop_] == 1)
+  {
+    ROS_INFO("Asking for emergency stop");
+    std_msgs::Empty empty;
+    estop_pub_.publish(empty);
+  }
 }
 
 }

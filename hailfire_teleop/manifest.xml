@@ -9,6 +9,7 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/hailfire_teleop</url>
   <depend package="geometry_msgs"/>
+  <depend package="std_msgs"/>
   <depend package="joy"/>
   <depend package="roscpp"/>
 
