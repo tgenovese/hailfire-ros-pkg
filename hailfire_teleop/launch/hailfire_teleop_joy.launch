@@ -18,7 +18,7 @@
 
     <!-- Max speed is 1m/s so no point asking for more -->
     <param name="scale_linear" type="double" value="1.0"/>
-    <param name="scale_angular" type="double" value="1.0"/>
+    <param name="scale_angular" type="double" value="2.5"/>
 
     <!-- "Red circle" button of PS3 controller -->
     <param name="button_estop" type="int" value="13"/>
