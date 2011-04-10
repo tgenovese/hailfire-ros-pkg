@@ -196,7 +196,7 @@ void RoboClaw::driveMotorsWithDutyCycle(int16_t duty_m1, int16_t duty_m2)
 void RoboClaw::driveMotorWithSpeed(uint8_t motor, int32_t speed)
 {
   uint8_t command = (motor == 1 ? 35 : 36);
-  uint16_t uspeed = speed;
+  uint32_t uspeed = speed;
 
   uint8_t bytes[7];
   bytes[0] = address_;
@@ -213,8 +213,8 @@ void RoboClaw::driveMotorWithSpeed(uint8_t motor, int32_t speed)
 void RoboClaw::driveMotorsWithSpeed(int32_t speed_m1, int32_t speed_m2)
 {
   uint8_t command = 37;
-  uint16_t uspeed_m1 = speed_m1;
-  uint16_t uspeed_m2 = speed_m2;
+  uint32_t uspeed_m1 = speed_m1;
+  uint32_t uspeed_m2 = speed_m2;
 
   uint8_t bytes[11];
   bytes[0] = address_;
@@ -238,7 +238,7 @@ void RoboClaw::driveMotorsWithSpeed(int32_t speed_m1, int32_t speed_m2)
 void RoboClaw::driveMotorWithSpeedAndAcceleration(uint8_t motor, int32_t speed, uint32_t accel)
 {
   uint8_t command = (motor == 1 ? 38 : 39);
-  uint16_t uspeed = speed;
+  uint32_t uspeed = speed;
 
   uint8_t bytes[11];
   bytes[0] = address_;
@@ -262,8 +262,8 @@ void RoboClaw::driveMotorWithSpeedAndAcceleration(uint8_t motor, int32_t speed, 
 void RoboClaw::driveMotorsWithSpeedAndAcceleration(int32_t speed_m1, int32_t speed_m2, uint32_t accel)
 {
   uint8_t command = 40;
-  uint16_t uspeed_m1 = speed_m1;
-  uint16_t uspeed_m2 = speed_m2;
+  uint32_t uspeed_m1 = speed_m1;
+  uint32_t uspeed_m2 = speed_m2;
 
   uint8_t bytes[15];
   bytes[0] = address_;
