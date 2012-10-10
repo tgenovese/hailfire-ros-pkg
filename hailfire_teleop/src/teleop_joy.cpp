@@ -27,7 +27,7 @@
  */
 
 #include <ros/ros.h>
-#include <joy/Joy.h>
+#include <sensor_msgs/Joy.h>
 #include <geometry_msgs/Twist.h>
 #include <std_msgs/Empty.h>
 
@@ -68,7 +68,7 @@ private:
    * geometry_msgs/Twist message.
    *
    */
-  void joyCallback(const joy::Joy::ConstPtr &joy);
+  void joyCallback(const sensor_msgs::Joy::ConstPtr &joy);
 
   ros::NodeHandle nh_;          /**< The ROS node handle */
   ros::Publisher twist_pub_;    /**< The ROS publisher of velocity command messages */
@@ -100,7 +100,7 @@ TeleopJoy::TeleopJoy():
   joy_sub_ = nh_.subscribe("joy", 10, &TeleopJoy::joyCallback, this);
 }
 
-void TeleopJoy::joyCallback(const joy::Joy::ConstPtr &joy)
+void TeleopJoy::joyCallback(const sensor_msgs::Joy::ConstPtr &joy)
 {
   geometry_msgs::Twist cmd;
   cmd.linear.x = l_scale_ * joy->axes[linear_];
