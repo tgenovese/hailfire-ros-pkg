@@ -1,0 +1,12 @@
+<launch>
+	<arg name="model" default="hailfire"/>
+	<arg name="gui" default="True" />
+    <param name="robot_description" command="$(find xacro)/xacro.py '$(find hailfire_description)/robots/$(arg model).urdf.xacro'" />
+	<param name="use_gui" value="$(arg gui)"/>
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" ></node>
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" output="screen">
+        <param name="publish_frequency" type="double" value="30.0" />
+        <!--param name="tf_prefix" type="string" value="" /-->
+    </node>
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find hailfire_description)/urdf.vcg" />
+</launch>

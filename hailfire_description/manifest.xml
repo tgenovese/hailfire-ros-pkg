@@ -1,0 +1,16 @@
+<package>
+  <description brief="hailfire_description">
+
+     hailfire_description
+
+  </description>
+  <author>Thierry Genovese</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire_description</url>
+  <depend package="urdf"/>
+  <depend package="xacro"/>
+
+</package>
+
+
