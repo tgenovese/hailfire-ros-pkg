@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="hailfire_hardware">
+
+  <!-- Macro for Hailfire body, without Xtion Pro -->
+
+  <property name="M_PI" value="3.14159"/>
+  <property name="base_x" value="0.2"/>
+  <property name="base_y" value="0.2"/>
+  <property name="base_z" value="0.2"/>
+  <property name="wheel_r" value="0.033"/>
+  <property name="wheel_h" value="0.023"/>
+  <property name="wheel_z" value="0.015"/>
+  <property name="wheel_track" value="0.26"/>
+
+  <xacro:macro name="hailfire_body">
+
+    <!-- base_footprint is a fictitious link(frame) that is on the ground right below base_link origin, navigation stack depends on this frame -->
+    <link name="base_footprint">
+      <!--
+      <inertial>
+        <mass value="0.0001" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001" />
+      </inertial>
+      -->
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="Green">
+          <color rgba="0 0.8 0 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.001 0.001 0.001"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="base_link">
+      <inertial>
+        <mass value="2"/>
+        <origin xyz="0 0 0"/>
+        <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.5"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 ${base_z/2}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${base_x} ${base_y} ${base_z}"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${base_z/2}" rpy="0 0 0"/>
+        <geometry>
+          <box size="${base_x} ${base_y} ${base_z}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="base_footprint_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="base_footprint"/>
+      <child link="base_link"/>
+    </joint>
+
+    <link name="left_wheel_link">
+      <inertial>
+        <origin xyz="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 ${M_PI/2} ${M_PI/2}"/>
+        <geometry>
+          <cylinder radius="${wheel_r}" length="${wheel_h}"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 ${M_PI/2} ${M_PI/2}"/>
+        <geometry>
+          <cylinder radius="${wheel_r}" length="${wheel_h}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="left_wheel_joint" type="continuous">
+      <origin xyz="0 ${wheel_track/2} ${wheel_z}" rpy="0 0 0"/>
+      <parent link="base_link"/>
+      <child link="left_wheel_link"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+
+    <link name="right_wheel_link">
+      <inertial>
+        <origin xyz="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 ${M_PI/2} ${M_PI/2}"/>
+        <geometry>
+          <cylinder radius="${wheel_r}" length="${wheel_h}"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 ${M_PI/2} ${M_PI/2}"/>
+        <geometry>
+          <cylinder radius="${wheel_r}" length="${wheel_h}"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="right_wheel_joint" type="continuous">
+      <origin xyz="0 ${-wheel_track/2} ${wheel_z}" rpy="0 0 0"/>
+      <parent link="base_link"/>
+      <child link="right_wheel_link"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+</robot>

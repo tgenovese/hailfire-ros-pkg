@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<robot name="hailfire">
+  <!-- Included URDF Files -->
+  <include filename="$(find hailfire_description)/urdf/hailfire_body.urdf.xacro"/>
+  <include filename="$(find hailfire_description)/urdf/hailfire_calibration.xacro"/>
+  <include filename="$(find hailfire_description)/urdf/asus_xtion_pro.urdf.xacro"/>
+
+  <!-- Body of Hailfire robot, with wheels -->
+  <hailfire_body/>
+
+  <!-- ASUS Xtion PRO frames and mounting -->
+  <hailfire_xtion_pro/>
+</robot>
