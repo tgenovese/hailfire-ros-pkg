@@ -28,7 +28,9 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <nav_msgs/Odometry.h>
 #include <std_msgs/Empty.h>
+#include <tf/transform_broadcaster.h>
 #include "hailfire_robo_claw/robo_claw.h"
 
 namespace hailfire_base_controller
@@ -50,6 +52,25 @@ struct EncoderParams
 {
   int id;
   double gain;
+};
+
+struct PolarCounts
+{
+  double angular; // corrected angular ticks
+  double linear;  // corrected linear ticks
+};
+
+struct OdomPosition
+{
+  double x; // m
+  double y; // m
+  double th; // rad
+};
+
+struct PolarSpeed
+{
+  double angular; // rad/s
+  double linear;  // m/s
 };
 
 /**
@@ -113,6 +134,11 @@ public:
    */
   ~BaseController();
 
+  /**
+   * @brief Main loop
+   */
+  void spin();
+
 private:
 
   /**
@@ -149,9 +175,26 @@ private:
    */
   void hardStop(const std_msgs::Empty::ConstPtr &empty);
 
+  /**
+   * @brief Reads the encoder counts and updates the position_ member.
+   */
+  void refreshPosition();
+
+  /**
+   * @brief Reads the encoder speeds and updates the speed_ member.
+   */
+  void refreshSpeed();
+
+  /**
+   * @brief Publish odometry transform over tf and odometry message on /odom topic.
+   */
+  void publishOdometry();
+
   ros::NodeHandle nh_;              /**< The ROS node handle */
   ros::Subscriber twist_sub_;       /**< The ROS subscriber to velocity command messages */
   ros::Subscriber estop_sub_;       /**< The ROS subscriber to emergency stop messages */
+  ros::Publisher odom_pub_;         /**< The ROS publisher of Odometry messages */
+  tf::TransformBroadcaster odom_bc_; /**< The TF broadcaster of Odometry messages */
 
   hailfire_robo_claw::RoboClaw *robo_claw_;     /**< The RoboClaw instance */
 
@@ -166,6 +209,10 @@ private:
 
   double encoders_ticks_per_m_;     /**< Number of encoder ticks per m */
   double encoders_track_m_;         /**< Length between encoders in m */
+
+  PolarCounts prev_counts_;         /**< Previous polar odometers value */
+  OdomPosition position_;           /**< Position computed from odometers */
+  PolarSpeed speed_;                /**< Speed from odometers */
 };
 
 BaseController::BaseController(void)
@@ -209,6 +256,9 @@ BaseController::BaseController(void)
   // Subscribe to estop topic
   ROS_INFO("Subscribing to estop topic");
   estop_sub_ = nh_.subscribe("estop", 1, &BaseController::hardStop, this);
+
+  // Publish to /odom topic
+  odom_pub_ = nh_.advertise<nav_msgs::Odometry>("odom", 50);
 
   ROS_INFO("Ready to handle velocity commands");
 }
@@ -344,6 +394,147 @@ void BaseController::hardStop(const std_msgs::Empty::ConstPtr &empty)
   }
 }
 
+void BaseController::refreshPosition()
+{
+  // get polar odometers counts
+  PolarCounts odometers;
+  if (robo_claw_) {
+    // bit 0: 1 if underflow occurred
+    // bit 1: current direction 0=forward 1=backward
+    // bit 2: 1 if overflow occurred
+    // bit 7: 1 if encoder is OK
+    // FIXME: could publish these to /diagnostics
+    uint8_t l_status;
+    uint8_t r_status;
+
+    // Read encoders counts (ticks)
+    int32_t l_count_raw;
+    int32_t r_count_raw;
+    robo_claw_->readEncoderCount(left_encoder_.id, &l_count_raw, &l_status);
+    robo_claw_->readEncoderCount(right_encoder_.id, &r_count_raw, &r_status);
+
+    // Apply gains
+    double l_count_g = l_count_raw * left_encoder_.gain;
+    double r_count_g = r_count_raw * right_encoder_.gain;
+
+    // Convert to polar counts
+    odometers.angular = (r_count_g - l_count_g) / 2;
+    odometers.linear = (r_count_g + l_count_g) / 2;
+  }
+  // Not running on real hardware
+  else {
+    odometers.angular = 0;
+    odometers.linear = 0;
+  }
+
+  // compute differences since last measure
+  PolarCounts delta;
+  delta.angular = odometers.angular - prev_counts_.angular;
+  delta.linear = odometers.linear - prev_counts_.linear;
+
+  // keep the new measures for later
+  prev_counts_.angular = odometers.angular;
+  prev_counts_.linear = odometers.linear;
+
+  // update position
+  if (delta.angular == 0) {
+    // we are going really straight (very unlikely)
+    position_.x += cos(position_.th) * delta.linear / encoders_ticks_per_m_;
+    position_.y += sin(position_.th) * delta.linear / encoders_ticks_per_m_;
+  } else {
+    // approximate the trajectory to an arc of a circle: compute its radius and angle
+    int arc_r = delta.linear * encoders_track_m_ / (delta.angular * 2);
+    int arc_a = 2 * delta.angular / (encoders_ticks_per_m_ * encoders_track_m_);
+
+    position_.x += arc_r * (-sin(position_.th) + sin(position_.th + arc_a));
+    position_.y += arc_r * (cos(position_.th) - cos(position_.th + arc_a));
+    position_.th += arc_a;
+  }
+}
+
+void BaseController::refreshSpeed()
+{
+  if (robo_claw_) {
+    // Read encoders speeds (ticks/s)
+    int32_t l_speed_raw;
+    int32_t r_speed_raw;
+    robo_claw_->readEncoderSpeed(left_encoder_.id, &l_speed_raw);
+    robo_claw_->readEncoderSpeed(right_encoder_.id, &r_speed_raw);
+
+    // Apply gains
+    double l_speed_g = l_speed_raw * left_encoder_.gain;
+    double r_speed_g = r_speed_raw * right_encoder_.gain;
+
+    // Convert to polar speeds
+    double a_speed = (r_speed_g - l_speed_g) / 2;
+    double l_speed = (r_speed_g + l_speed_g) / 2;
+
+    // Convert to m and rad
+    speed_.angular = 2 * a_speed / (encoders_ticks_per_m_ * encoders_track_m_);
+    speed_.linear = l_speed / encoders_ticks_per_m_;
+  }
+  // Not running on real hardware
+  else {
+    speed_.angular = 0;
+    speed_.linear = 0;
+  }
+}
+
+void BaseController::publishOdometry()
+{
+  refreshPosition();
+  refreshSpeed();
+
+  ros::Time current_time = ros::Time::now();
+
+  // since all odometry is 6DOF we'll need a quaternion created from yaw
+  geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(position_.th);
+
+  // first, we'll publish the transform over tf
+  geometry_msgs::TransformStamped odom_trans;
+  odom_trans.header.stamp = current_time;
+  odom_trans.header.frame_id = "odom";
+  odom_trans.child_frame_id = "base_link";
+
+  odom_trans.transform.translation.x = position_.x;
+  odom_trans.transform.translation.y = position_.y;
+  odom_trans.transform.translation.z = 0.0;
+  odom_trans.transform.rotation = odom_quat;
+
+  // send the transform
+  odom_bc_.sendTransform(odom_trans);
+
+  // next, we'll publish the odometry message over ROS
+  nav_msgs::Odometry odom;
+  odom.header.stamp = current_time;
+  odom.header.frame_id = "odom";
+
+  //  set the position
+  odom.pose.pose.position.x = position_.x;
+  odom.pose.pose.position.y = position_.y;
+  odom.pose.pose.position.z = 0.0;
+  odom.pose.pose.orientation = odom_quat;
+
+  // set the velocity
+  odom.child_frame_id = "base_link";
+  odom.twist.twist.linear.x = speed_.linear;
+  odom.twist.twist.linear.y = 0.0;
+  odom.twist.twist.angular.z = speed_.angular;
+
+  // publish the message
+  odom_pub_.publish(odom);
+}
+
+void BaseController::spin()
+{
+  ros::Rate r(50.0); // Hz
+  while (nh_.ok()) {
+    ros::spinOnce(); // check for incoming messages
+    publishOdometry();
+    r.sleep();
+  }
+}
+
 }
 
 int main(int argc, char **argv)
@@ -351,8 +542,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "base_controller");
 
   hailfire_base_controller::BaseController base_controller;
-
-  ros::spin();
+  base_controller.spin();
 
   return 0;
 }
