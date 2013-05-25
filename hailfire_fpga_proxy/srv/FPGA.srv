@@ -1,0 +1,11 @@
+# Read commands
+Odometer[] odometers
+ExtPort[] ext_ports
+
+# Write commands
+LED[] leds
+Motor[] motors
+Servo[] servos
+---
+Odometer[] odometers
+ExtPort[] ext_ports
