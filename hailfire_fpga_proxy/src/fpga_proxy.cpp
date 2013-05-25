@@ -146,7 +146,7 @@ FPGAProxy::FPGAProxy()
   ros::NodeHandle nh_param("~spidev");
 
   std::string dev_name;
-  nh_param.param("dev_name", dev_name, std::string("/dev/spidev1.0"));
+  nh_param.param("dev_name", dev_name, std::string("/dev/spidev1.1"));
 
   bool inhibit;
   nh_param.param("inhibit", inhibit, false);

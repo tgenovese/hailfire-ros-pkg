@@ -6,7 +6,7 @@
 
 using namespace hailfire_fpga_proxy;
 
-static char dev_filename[] = "/dev/spidev1.0";
+static char dev_filename[] = "/dev/spidev1.1";
 
 TEST(SPIDevice, DISABLED_foo)
 {
