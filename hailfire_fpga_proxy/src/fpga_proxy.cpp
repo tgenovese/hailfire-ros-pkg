@@ -191,7 +191,7 @@ FPGAProxy::FPGAProxy()
 
   srv1_ = nh_.advertiseService("fpga_proxy_raw", &FPGAProxy::doTransfer, this);
   srv2_ = nh_.advertiseService("fpga_proxy_test", &FPGAProxy::doTestRegisters, this);
-  srv3_ = nh_.advertiseService("fpga_proxy_test", &FPGAProxy::doHighLevel, this);
+  srv3_ = nh_.advertiseService("fpga_proxy", &FPGAProxy::doHighLevel, this);
   ROS_INFO("Ready to proxy requests to FPGA");
 }
 
@@ -351,19 +351,19 @@ bool FPGAProxy::doTestRegisters(hailfire_fpga_proxy::FPGATestRegisters::Request 
   // Prepare transfer
   hailfire_fpga_proxy::FPGATransfer tr;
   tr.request.pairs.reserve(13);
-  tr.request.pairs[0] = read_fixed;
-  tr.request.pairs[1] = read_uint8;
-  tr.request.pairs[2] = read_uint16;
-  tr.request.pairs[3] = read_uint32;
-  tr.request.pairs[4] = read_int8;
-  tr.request.pairs[5] = read_int16;
-  tr.request.pairs[6] = read_int32;
-  tr.request.pairs[7] = set_uint8;
-  tr.request.pairs[8] = set_uint16;
-  tr.request.pairs[9] = set_uint32;
-  tr.request.pairs[10] = set_int8;
-  tr.request.pairs[11] = set_int16;
-  tr.request.pairs[12] = set_int32;
+  tr.request.pairs.push_back(read_fixed);
+  tr.request.pairs.push_back(read_uint8);
+  tr.request.pairs.push_back(read_uint16);
+  tr.request.pairs.push_back(read_uint32);
+  tr.request.pairs.push_back(read_int8);
+  tr.request.pairs.push_back(read_int16);
+  tr.request.pairs.push_back(read_int32);
+  tr.request.pairs.push_back(set_uint8);
+  tr.request.pairs.push_back(set_uint16);
+  tr.request.pairs.push_back(set_uint32);
+  tr.request.pairs.push_back(set_int8);
+  tr.request.pairs.push_back(set_int16);
+  tr.request.pairs.push_back(set_int32);
 
   if (!doTransfer(tr.request, tr.response))
   {
@@ -555,14 +555,14 @@ int32_t int32_from_bytes(std::vector<uint8_t> const &bytes)
 
 std::vector<uint8_t> bytes_from_uint8(uint8_t const &value)
 {
-  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> bytes (1, 0);
   bytes[0] = value;
   return bytes;
 }
 
 std::vector<uint8_t> bytes_from_uint16(uint16_t const &value)
 {
-  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> bytes (2, 0);
   bytes[0] = (value >> 8) & 0xFF;
   bytes[1] = (value >> 0) & 0xFF;
   return bytes;
@@ -570,7 +570,7 @@ std::vector<uint8_t> bytes_from_uint16(uint16_t const &value)
 
 std::vector<uint8_t> bytes_from_uint32(uint32_t const &value)
 {
-  std::vector<uint8_t> bytes;
+  std::vector<uint8_t> bytes (4, 0);
   bytes[0] = (value >> 24) & 0xFF;
   bytes[1] = (value >> 16) & 0xFF;
   bytes[2] = (value >> 8) & 0xFF;
