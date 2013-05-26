@@ -1,0 +1,15 @@
+<package>
+  <description brief="hailfire_spi">
+
+     hailfire_spi
+
+  </description>
+  <author>Thierry Genovese</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/hailfire_spi</url>
+  <depend package="roscpp"/>
+
+</package>
+
+

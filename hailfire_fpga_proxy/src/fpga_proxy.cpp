@@ -31,16 +31,16 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "hailfire_fpga_proxy/spi_device.h"
-#include "hailfire_fpga_proxy/FPGAKeyValue.h"
-#include "hailfire_fpga_proxy/FPGATransfer.h"
-#include "hailfire_fpga_proxy/FPGATestRegisters.h"
-#include "hailfire_fpga_proxy/ExtPort.h"
-#include "hailfire_fpga_proxy/LED.h"
-#include "hailfire_fpga_proxy/Motor.h"
-#include "hailfire_fpga_proxy/Odometer.h"
-#include "hailfire_fpga_proxy/Servo.h"
-#include "hailfire_fpga_proxy/FPGA.h"
+#include "hailfire_spi/spi_device.h"
+#include "hailfire_fpga_msgs/FPGAKeyValue.h"
+#include "hailfire_fpga_msgs/FPGATransfer.h"
+#include "hailfire_fpga_msgs/FPGATestRegisters.h"
+#include "hailfire_fpga_msgs/ExtPort.h"
+#include "hailfire_fpga_msgs/LED.h"
+#include "hailfire_fpga_msgs/Motor.h"
+#include "hailfire_fpga_msgs/Odometer.h"
+#include "hailfire_fpga_msgs/Servo.h"
+#include "hailfire_fpga_msgs/FPGA.h"
 
 /**
  * @brief Returns an hexadecimal dump of the given byte array.
@@ -50,7 +50,7 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes);
 /**
  * @brief Returns an hexadecimal dump of the given FPGAKeyValue array.
  */
-std::string dump_bytes(std::vector<hailfire_fpga_proxy::FPGAKeyValue> const &bytes);
+std::string dump_bytes(std::vector<hailfire_fpga_msgs::FPGAKeyValue> const &bytes);
 
 std::vector<uint8_t> bytes_from_uint8(uint8_t const &value);
 std::vector<uint8_t> bytes_from_uint16(uint16_t const &value);
@@ -109,8 +109,8 @@ private:
    * Length, Value encoded byte array), sends it to the FPGA via SPI and
    * transforms the FPGA response back to a ROS format.
    */
-  bool doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
-                  hailfire_fpga_proxy::FPGATransfer::Response &res);
+  bool doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
+                  hailfire_fpga_msgs::FPGATransfer::Response &res);
 
   /**
    * @brief Service handler.
@@ -120,8 +120,8 @@ private:
    * Length, Value encoded byte array), sends it to the FPGA via SPI and
    * transforms the FPGA response back to a ROS format.
    */
-  bool doTestRegisters(hailfire_fpga_proxy::FPGATestRegisters::Request &req,
-                       hailfire_fpga_proxy::FPGATestRegisters::Response &res);
+  bool doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
+                       hailfire_fpga_msgs::FPGATestRegisters::Response &res);
 
   /**
    * @brief Service handler.
@@ -131,14 +131,14 @@ private:
    * Length, Value encoded byte array), sends it to the FPGA via SPI and
    * transforms the FPGA response back to a ROS format.
    */
-  bool doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
-                   hailfire_fpga_proxy::FPGA::Response &res);
+  bool doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
+                   hailfire_fpga_msgs::FPGA::Response &res);
 
-  ros::NodeHandle nh_;                         /**< The ROS node handle */
-  ros::ServiceServer srv1_;                    /**< A ROS service handle */
-  ros::ServiceServer srv2_;                    /**< A ROS service handle */
-  ros::ServiceServer srv3_;                    /**< A ROS service handle */
-  hailfire_fpga_proxy::SPIDevice *spi_device_; /**< The SPI device instance */
+  ros::NodeHandle nh_;                  /**< The ROS node handle */
+  ros::ServiceServer srv1_;             /**< A ROS service handle */
+  ros::ServiceServer srv2_;             /**< A ROS service handle */
+  ros::ServiceServer srv3_;             /**< A ROS service handle */
+  hailfire_spi::SPIDevice *spi_device_; /**< The SPI device instance */
 };
 
 FPGAProxy::FPGAProxy()
@@ -158,7 +158,7 @@ FPGAProxy::FPGAProxy()
   else
   {
     ROS_INFO("SPI device: %s", dev_name.c_str());
-    spi_device_ = new hailfire_fpga_proxy::SPIDevice(dev_name.c_str());
+    spi_device_ = new hailfire_fpga_msgs::SPIDevice(dev_name.c_str());
   }
 
   int mode;
@@ -203,8 +203,8 @@ FPGAProxy::~FPGAProxy()
   }
 }
 
-bool FPGAProxy::doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
-                           hailfire_fpga_proxy::FPGATransfer::Response &res)
+bool FPGAProxy::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
+                           hailfire_fpga_msgs::FPGATransfer::Response &res)
 {
   ROS_INFO("doTransfer");
 
@@ -253,7 +253,7 @@ bool FPGAProxy::doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
   unsigned int rx_offset = 0;
   for (unsigned int i = 0; i < req.pairs.size(); ++i)
   {
-    hailfire_fpga_proxy::FPGAKeyValue pair_i;
+    hailfire_fpga_msgs::FPGAKeyValue pair_i;
 
     // Key
     pair_i.key = req.pairs[i].key;
@@ -278,78 +278,78 @@ bool FPGAProxy::doTransfer(hailfire_fpga_proxy::FPGATransfer::Request &req,
   return true;
 }
 
-bool FPGAProxy::doTestRegisters(hailfire_fpga_proxy::FPGATestRegisters::Request &req,
-                                hailfire_fpga_proxy::FPGATestRegisters::Response &res)
+bool FPGAProxy::doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
+                                hailfire_fpga_msgs::FPGATestRegisters::Response &res)
 {
   ROS_INFO("doTestRegisters");
 
   // Read fixed uint32 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_fixed;
-  read_fixed.key = hailfire_fpga_proxy::FPGAKeyValue::TEST_VALUE;
+  hailfire_fpga_msgs::FPGAKeyValue read_fixed;
+  read_fixed.key = hailfire_fpga_msgs::FPGAKeyValue::TEST_VALUE;
   read_fixed.value.assign(4, 0);
 
   // Read uint8 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_uint8;
-  read_uint8.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_UINT8;
+  hailfire_fpga_msgs::FPGAKeyValue read_uint8;
+  read_uint8.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT8;
   read_uint8.value.assign(1, 0);
 
   // Read uint16 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_uint16;
-  read_uint16.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_UINT16;
+  hailfire_fpga_msgs::FPGAKeyValue read_uint16;
+  read_uint16.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT16;
   read_uint16.value.assign(2, 0);
 
   // Read uint32 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_uint32;
-  read_uint32.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_UINT32;
+  hailfire_fpga_msgs::FPGAKeyValue read_uint32;
+  read_uint32.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT32;
   read_uint32.value.assign(4, 0);
 
   // Read int8 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_int8;
-  read_int8.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_INT8;
+  hailfire_fpga_msgs::FPGAKeyValue read_int8;
+  read_int8.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT8;
   read_int8.value.assign(1, 0);
 
   // Read int16 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_int16;
-  read_int16.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_INT16;
+  hailfire_fpga_msgs::FPGAKeyValue read_int16;
+  read_int16.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT16;
   read_int16.value.assign(2, 0);
 
   // Read int32 test register
-  hailfire_fpga_proxy::FPGAKeyValue read_int32;
-  read_int32.key = hailfire_fpga_proxy::FPGAKeyValue::READ_TEST_REGISTER_INT32;
+  hailfire_fpga_msgs::FPGAKeyValue read_int32;
+  read_int32.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT32;
   read_int32.value.assign(4, 0);
 
   // Set uint8 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_uint8;
-  set_uint8.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_UINT8;
+  hailfire_fpga_msgs::FPGAKeyValue set_uint8;
+  set_uint8.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT8;
   set_uint8.value = bytes_from_uint8(req.new_uint8);
 
   // Set uint16 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_uint16;
-  set_uint16.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_UINT16;
+  hailfire_fpga_msgs::FPGAKeyValue set_uint16;
+  set_uint16.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT16;
   set_uint16.value = bytes_from_uint16(req.new_uint16);
 
   // Set uint32 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_uint32;
-  set_uint32.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_UINT32;
+  hailfire_fpga_msgs::FPGAKeyValue set_uint32;
+  set_uint32.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT32;
   set_uint32.value = bytes_from_uint32(req.new_uint32);
 
   // Set int8 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_int8;
-  set_int8.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_INT8;
+  hailfire_fpga_msgs::FPGAKeyValue set_int8;
+  set_int8.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT8;
   set_int8.value = bytes_from_int8(req.new_int8);
 
   // Set int16 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_int16;
-  set_int16.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_INT16;
+  hailfire_fpga_msgs::FPGAKeyValue set_int16;
+  set_int16.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT16;
   set_int16.value = bytes_from_int16(req.new_int16);
 
   // Set int32 test register with new value
-  hailfire_fpga_proxy::FPGAKeyValue set_int32;
-  set_int32.key = hailfire_fpga_proxy::FPGAKeyValue::WRITE_TEST_REGISTER_INT32;
+  hailfire_fpga_msgs::FPGAKeyValue set_int32;
+  set_int32.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT32;
   set_int32.value = bytes_from_int32(req.new_int32);
 
   // Prepare transfer
-  hailfire_fpga_proxy::FPGATransfer tr;
+  hailfire_fpga_msgs::FPGATransfer tr;
   tr.request.pairs.reserve(13);
   tr.request.pairs.push_back(read_fixed);
   tr.request.pairs.push_back(read_uint8);
@@ -382,25 +382,25 @@ bool FPGAProxy::doTestRegisters(hailfire_fpga_proxy::FPGATestRegisters::Request 
   return true;
 }
 
-bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
-                            hailfire_fpga_proxy::FPGA::Response &res)
+bool FPGAProxy::doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
+                            hailfire_fpga_msgs::FPGA::Response &res)
 {
   ROS_INFO("doHighLevel");
   unsigned int i;
 
-  hailfire_fpga_proxy::FPGATransfer tr;
+  hailfire_fpga_msgs::FPGATransfer tr;
 
   for (i = 0; i < req.odometers.size(); ++i)
   {
     // Read int32 count
-    hailfire_fpga_proxy::FPGAKeyValue read_count;
-    read_count.key = hailfire_fpga_proxy::FPGAKeyValue::ODOMETER_COUNT_BASE + req.odometers[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue read_count;
+    read_count.key = hailfire_fpga_msgs::FPGAKeyValue::ODOMETER_COUNT_BASE + req.odometers[i].key;
     read_count.value.assign(4, 0);
     tr.request.pairs.push_back(read_count);
 
     // Read int32 speed
-    hailfire_fpga_proxy::FPGAKeyValue read_speed;
-    read_speed.key = hailfire_fpga_proxy::FPGAKeyValue::ODOMETER_SPEED_BASE + req.odometers[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue read_speed;
+    read_speed.key = hailfire_fpga_msgs::FPGAKeyValue::ODOMETER_SPEED_BASE + req.odometers[i].key;
     read_speed.value.assign(4, 0);
     tr.request.pairs.push_back(read_speed);
   }
@@ -408,8 +408,8 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
   for (i = 0; i < req.ext_ports.size(); ++i)
   {
     // Read uint8 port
-    hailfire_fpga_proxy::FPGAKeyValue read_port;
-    read_port.key = hailfire_fpga_proxy::FPGAKeyValue::EXT_PORT_VALUE_BASE + req.ext_ports[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue read_port;
+    read_port.key = hailfire_fpga_msgs::FPGAKeyValue::EXT_PORT_VALUE_BASE + req.ext_ports[i].key;
     read_port.value.assign(1, 0);
     tr.request.pairs.push_back(read_port);
   }
@@ -417,8 +417,8 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
   for (i = 0; i < req.leds.size(); ++i)
   {
     // Set bool led
-    hailfire_fpga_proxy::FPGAKeyValue set_led;
-    set_led.key = hailfire_fpga_proxy::FPGAKeyValue::LED_BASE + req.leds[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue set_led;
+    set_led.key = hailfire_fpga_msgs::FPGAKeyValue::LED_BASE + req.leds[i].key;
     set_led.value = bytes_from_uint8(req.leds[i].on ? 1 : 0);
     tr.request.pairs.push_back(set_led);
   }
@@ -426,8 +426,8 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
   for (i = 0; i < req.motors.size(); ++i)
   {
     // Set int16 motor speed
-    hailfire_fpga_proxy::FPGAKeyValue set_motor;
-    set_motor.key = hailfire_fpga_proxy::FPGAKeyValue::MOTOR_SPEED_BASE + req.motors[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue set_motor;
+    set_motor.key = hailfire_fpga_msgs::FPGAKeyValue::MOTOR_SPEED_BASE + req.motors[i].key;
     set_motor.value = bytes_from_int16(req.motors[i].speed);
     tr.request.pairs.push_back(set_motor);
   }
@@ -435,8 +435,8 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
   for (i = 0; i < req.servos.size(); ++i)
   {
     // Set uint16 servo consign speed
-    hailfire_fpga_proxy::FPGAKeyValue set_servo;
-    set_servo.key = hailfire_fpga_proxy::FPGAKeyValue::SERVO_CONSIGN_BASE + req.servos[i].key;
+    hailfire_fpga_msgs::FPGAKeyValue set_servo;
+    set_servo.key = hailfire_fpga_msgs::FPGAKeyValue::SERVO_CONSIGN_BASE + req.servos[i].key;
     set_servo.value = bytes_from_uint16(req.servos[i].consign);
     tr.request.pairs.push_back(set_servo);
   }
@@ -449,7 +449,7 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
   unsigned int pair_i = 0;
   for (i = 0; i < req.odometers.size(); ++i)
   {
-    hailfire_fpga_proxy::Odometer odometer;
+    hailfire_fpga_msgs::Odometer odometer;
     odometer.key = req.odometers[i].key;
     odometer.count = int32_from_bytes(tr.response.pairs[pair_i++].value);
     odometer.speed = int32_from_bytes(tr.response.pairs[pair_i++].value);
@@ -458,7 +458,7 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_proxy::FPGA::Request &req,
 
   for (i = 0; i < req.ext_ports.size(); ++i)
   {
-    hailfire_fpga_proxy::ExtPort ext_port;
+    hailfire_fpga_msgs::ExtPort ext_port;
     ext_port.key = req.ext_ports[i].key;
     uint8_t port = uint8_from_bytes(tr.response.pairs[pair_i++].value);
     ext_port.pins[0] = (port & 0x01) ? true : false;
@@ -496,7 +496,7 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes)
   return ss.str();
 }
 
-std::string dump_bytes(std::vector<hailfire_fpga_proxy::FPGAKeyValue> const &bytes)
+std::string dump_bytes(std::vector<hailfire_fpga_msgs::FPGAKeyValue> const &bytes)
 {
   std::stringstream ss;
   ss << std::setfill('0');

@@ -8,7 +8,8 @@
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/hailfire_fpga_proxy</url>
-  <depend package="std_msgs"/>
+  <depend package="hailfire_fpga_msgs"/>
+  <depend package="hailfire_spi"/>
   <depend package="roscpp"/>
 
 </package>
