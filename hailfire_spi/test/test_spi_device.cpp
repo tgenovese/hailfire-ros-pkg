@@ -1,10 +1,10 @@
-#include "hailfire_fpga_proxy/spi_device.h"
+#include "hailfire_spi/spi_device.h"
 #include <gtest/gtest.h>
 #include <iostream>
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-using namespace hailfire_fpga_proxy;
+using namespace hailfire_spi;
 
 static char dev_filename[] = "/dev/spidev1.1";
 

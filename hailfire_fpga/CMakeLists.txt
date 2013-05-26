@@ -29,6 +29,4 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
-#build fpga_proxy service node
-rosbuild_add_executable(fpga_proxy src/fpga_proxy.cpp)
-#target_link_libraries(fpga_proxy ${PROJECT_NAME})
+rosbuild_add_executable(hailfire_fpga_node src/hailfire_fpga_node.cpp)

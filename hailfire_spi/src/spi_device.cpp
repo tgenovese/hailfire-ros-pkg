@@ -26,14 +26,14 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "hailfire_fpga_proxy/spi_device.h"
+#include "hailfire_spi/spi_device.h"
 #include <ros/assert.h>
 
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 
-namespace hailfire_fpga_proxy
+namespace hailfire_spi
 {
 
 SPIDevice::SPIDevice(const char *dev_name)

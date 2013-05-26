@@ -1,13 +1,13 @@
 <package>
-  <description brief="hailfire_fpga_proxy">
+  <description brief="hailfire_fpga">
 
-     hailfire_fpga_proxy
+     hailfire_fpga
 
   </description>
   <author>Thierry Genovese</author>
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
-  <url>http://ros.org/wiki/hailfire_fpga_proxy</url>
+  <url>http://ros.org/wiki/hailfire_fpga</url>
   <depend package="hailfire_fpga_msgs"/>
   <depend package="hailfire_spi"/>
   <depend package="roscpp"/>

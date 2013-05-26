@@ -9,7 +9,9 @@
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/hailfire_spi</url>
   <depend package="roscpp"/>
-
+  <export>
+    <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib -Wl,-rpath,${prefix}/lib -lhailfire_spi"/>
+  </export>
 </package>
 
 

@@ -67,15 +67,15 @@ int16_t int16_from_bytes(std::vector<uint8_t> const &bytes);
 int32_t int32_from_bytes(std::vector<uint8_t> const &bytes);
 
 /**
- * @class FPGAProxy
- * @brief Service node class to proxy key-value requests to the FPGA.
+ * @class FPGANode
+ * @brief Node class to service FPGA key-value requests.
  *
  * This class implements a service allowing key-value requests (in ROS messages)
  * to be forwarded to the FPGA (through SPI), whose responses are then returned
  * in the response to the ROS service call.
  *
  */
-class FPGAProxy
+class FPGANode
 {
 public:
 
@@ -92,12 +92,12 @@ public:
    * ~spidev/max_speed       appropriate setter is called if present
    *
    */
-  FPGAProxy();
+  FPGANode();
 
   /**
    * @brief Destructor: cleans up
    */
-  ~FPGAProxy();
+  ~FPGANode();
 
 private:
 
@@ -141,7 +141,7 @@ private:
   hailfire_spi::SPIDevice *spi_device_; /**< The SPI device instance */
 };
 
-FPGAProxy::FPGAProxy()
+FPGANode::FPGANode()
 {
   ros::NodeHandle nh_param("~spidev");
 
@@ -158,7 +158,7 @@ FPGAProxy::FPGAProxy()
   else
   {
     ROS_INFO("SPI device: %s", dev_name.c_str());
-    spi_device_ = new hailfire_fpga_msgs::SPIDevice(dev_name.c_str());
+    spi_device_ = new hailfire_spi::SPIDevice(dev_name.c_str());
   }
 
   int mode;
@@ -189,13 +189,13 @@ FPGAProxy::FPGAProxy()
     spi_device_->setMaxSpeed(max_speed);
   }
 
-  srv1_ = nh_.advertiseService("fpga_proxy_raw", &FPGAProxy::doTransfer, this);
-  srv2_ = nh_.advertiseService("fpga_proxy_test", &FPGAProxy::doTestRegisters, this);
-  srv3_ = nh_.advertiseService("fpga_proxy", &FPGAProxy::doHighLevel, this);
-  ROS_INFO("Ready to proxy requests to FPGA");
+  srv1_ = nh_.advertiseService("hailfire_fpga_raw", &FPGANode::doTransfer, this);
+  srv2_ = nh_.advertiseService("hailfire_fpga_test", &FPGANode::doTestRegisters, this);
+  srv3_ = nh_.advertiseService("hailfire_fpga", &FPGANode::doHighLevel, this);
+  ROS_INFO("Ready to service FPGA requests");
 }
 
-FPGAProxy::~FPGAProxy()
+FPGANode::~FPGANode()
 {
   if (spi_device_)
   {
@@ -203,7 +203,7 @@ FPGAProxy::~FPGAProxy()
   }
 }
 
-bool FPGAProxy::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
+bool FPGANode::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
                            hailfire_fpga_msgs::FPGATransfer::Response &res)
 {
   ROS_INFO("doTransfer");
@@ -278,7 +278,7 @@ bool FPGAProxy::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
   return true;
 }
 
-bool FPGAProxy::doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
+bool FPGANode::doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
                                 hailfire_fpga_msgs::FPGATestRegisters::Response &res)
 {
   ROS_INFO("doTestRegisters");
@@ -382,7 +382,7 @@ bool FPGAProxy::doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &
   return true;
 }
 
-bool FPGAProxy::doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
+bool FPGANode::doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
                             hailfire_fpga_msgs::FPGA::Response &res)
 {
   ROS_INFO("doHighLevel");
@@ -477,8 +477,8 @@ bool FPGAProxy::doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "fpga_proxy");
-  FPGAProxy fpga_proxy;
+  ros::init(argc, argv, "hailfire_fpga");
+  FPGANode hailfire_fpga;
   ros::spin();
 
   return 0;

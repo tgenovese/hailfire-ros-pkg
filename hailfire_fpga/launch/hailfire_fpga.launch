@@ -1,6 +1,6 @@
 <launch>
-  <!-- Launches the fpga_proxy node with suitable params -->
-  <node name="fpga_proxy" pkg="hailfire_fpga_proxy" type="fpga_proxy" required="true" output="screen">
+  <!-- Launches hailfire_fpga_node with suitable params -->
+  <node name="hailfire_fpga_node" pkg="hailfire_fpga" type="hailfire_fpga_node" required="true" output="screen">
 <!--     <param name="spidev/inhibit" type="bool" value="true"/> -->
     <param name="spidev/dev_name" type="str" value="/dev/spidev1.1"/>
     <param name="spidev/mode" type="int" value="1"/>
