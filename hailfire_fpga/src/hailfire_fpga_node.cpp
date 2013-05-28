@@ -189,7 +189,7 @@ private:
    * @brief Publishes odometer counts and speeds.
    *
    * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
-   * following topics: /odometer/[1-4] and /odometer/all.
+   * following topics: /odometer/port[1-4] and /odometer/all.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
@@ -200,7 +200,7 @@ private:
    * @brief Publishes ext port values.
    *
    * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
-   * following topics: /ext_port/[1-7] and /ext_port/all.
+   * following topics: /ext/port[1-7] and /ext/all.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
@@ -232,7 +232,7 @@ private:
    * @brief Handles motor consign messages.
    *
    * This method is called by ROS when a message is published on the
-   * /motor/[1-8] topics. It transforms and forwards the message to the FPGA.
+   * /motor/port[1-8] topics. It transforms and forwards the message to the FPGA.
    *
    * In the std_msgs::Int16 message, set data to the signed motor speed consign.
    *
@@ -244,7 +244,7 @@ private:
    * @brief Handles servo consign messages.
    *
    * This method is called by ROS when a message is published on the
-   * /servo/[1-8] topics. It transforms and forwards the message to the FPGA.
+   * /servo/port[1-8] topics. It transforms and forwards the message to the FPGA.
    *
    * In the std_msgs::UInt16 message, set data to the servo position consign.
    *
@@ -288,19 +288,19 @@ private:
   ros::NodeHandle nh_;                          /**< The ROS node handle */
 
   ros::Publisher odometers_pub_;                /**< /odometer/all publisher */
-  std::vector<ros::Publisher> odometer_pub_;    /**< /odometer/[1-4] publishers */
+  std::vector<ros::Publisher> odometer_pub_;    /**< /odometer/port[1-4] publishers */
 
-  ros::Publisher ext_ports_pub_;                /**< /ext_port/all publisher */
-  std::vector<ros::Publisher> ext_port_pub_;    /**< /ext_port/[1-7] publishers */
+  ros::Publisher ext_ports_pub_;                /**< /ext/all publisher */
+  std::vector<ros::Publisher> ext_port_pub_;    /**< /ext/port[1-7] publishers */
 
   ros::Subscriber led_green_sub_;               /**< /led/green subscriber */
   ros::Subscriber led_yellow_sub_;              /**< /led/yellow subscriber */
 
   ros::Subscriber motors_sub_;                  /**< /motor/combined subscriber */
-  std::vector<ros::Subscriber> motor_sub_;      /**< /motor/[1-8] subscriber */
+  std::vector<ros::Subscriber> motor_sub_;      /**< /motor/port[1-8] subscriber */
 
   ros::Subscriber servos_sub_;                  /**< /servo/combined subscriber */
-  std::vector<ros::Subscriber> servo_sub_;      /**< /servo/[1-8] subscriber */
+  std::vector<ros::Subscriber> servo_sub_;      /**< /servo/port[1-8] subscriber */
 
   ros::Publisher fixed_pub_;                    /**< /test/fixed publisher */
   ros::Publisher reg_read_pub_;                 /**< /test/reg_read publisher */
@@ -357,6 +357,9 @@ FPGANode::FPGANode()
     spi_device_->setMaxSpeed(max_speed);
   }
 
+  setupAdvertisements();
+  setupSubscriptions();
+
   ROS_INFO("Ready to service FPGA requests");
 }
 
@@ -390,27 +393,27 @@ void FPGANode::setupAdvertisements()
   odometers_pub_ =
     nh_odometer.advertise<hailfire_fpga_msgs::OdometerArray>("all", HAILFIRE_FPGA_MAX_MSG);
 
-  // /odometer/[1-4]
+  // /odometer/port[1-4]
   odometer_pub_.reserve(HAILFIRE_FPGA_ODOMETER_NB);
   for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
   {
     std::ostringstream oss;
-    oss << (i + 1);
+    oss << "port" << (i + 1);
     odometer_pub_.push_back(
       nh_odometer.advertise<hailfire_fpga_msgs::Odometer>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
   }
 
-  // /ext_port/all
-  ros::NodeHandle nh_ext_port("~ext_port");
+  // /ext/all
+  ros::NodeHandle nh_ext_port("~ext");
   ext_ports_pub_ =
     nh_ext_port.advertise<hailfire_fpga_msgs::ExtPortArray>("all", HAILFIRE_FPGA_MAX_MSG);
 
-  // /ext_port/[1-7]
+  // /ext/port[1-7]
   ext_port_pub_.reserve(HAILFIRE_FPGA_EXT_PORT_NB);
   for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
   {
     std::ostringstream oss;
-    oss << (i + 1);
+    oss << "port" << (i + 1);
     ext_port_pub_.push_back(
       nh_ext_port.advertise<hailfire_fpga_msgs::ExtPort>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
   }
@@ -439,12 +442,12 @@ void FPGANode::setupSubscriptions()
   ros::NodeHandle nh_motor("~motor");
   motors_sub_ = nh_motor.subscribe("combined", 1, &FPGANode::handleMotorCombinedMsg, this);
 
-  // /motor/[1-8]
+  // /motor/port[1-8]
   motor_sub_.reserve(HAILFIRE_FPGA_MOTOR_NB);
   for (i = 0; i < HAILFIRE_FPGA_MOTOR_NB; ++i)
   {
     std::ostringstream oss;
-    oss << (i + 1);
+    oss << "port" << (i + 1);
     motor_sub_.push_back(nh_motor.subscribe<std_msgs::Int16>
         (oss.str(), 1, boost::bind(&FPGANode::handleMotorMsg, this, i + 1, _1)));
   }
@@ -453,12 +456,12 @@ void FPGANode::setupSubscriptions()
   ros::NodeHandle nh_servo("~servo");
   servos_sub_ = nh_servo.subscribe("combined", 1, &FPGANode::handleServoCombinedMsg, this);
 
-  // /servo/[1-8]
+  // /servo/port[1-8]
   servo_sub_.reserve(HAILFIRE_FPGA_SERVO_NB);
   for (i = 0; i < HAILFIRE_FPGA_SERVO_NB; ++i)
   {
     std::ostringstream oss;
-    oss << (i + 1);
+    oss << "port" << (i + 1);
     servo_sub_.push_back(nh_servo.subscribe<std_msgs::UInt16>
         (oss.str(), 1, boost::bind(&FPGANode::handleServoMsg, this, i + 1, _1)));
   }
@@ -513,11 +516,10 @@ void FPGANode::publishOdometers()
   doTransfer(kv_pairs);
 
   // Gather values and publish to subscribed topics
+  hailfire_fpga_msgs::OdometerArray all_msg;
   unsigned int pair_i = 0;
   for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
   {
-    hailfire_fpga_msgs::OdometerArray all_msg;
-
     if (publish_all || publish_needed[i])
     {
       hailfire_fpga_msgs::Odometer single_msg;
@@ -530,10 +532,10 @@ void FPGANode::publishOdometers()
       if (publish_all)
         all_msg.odometers.push_back(single_msg);
     }
-
-    if (publish_all)
-      odometers_pub_.publish(all_msg);
   }
+
+  if (publish_all)
+    odometers_pub_.publish(all_msg);
 }
 
 void FPGANode::publishExtPorts()
@@ -575,11 +577,10 @@ void FPGANode::publishExtPorts()
   doTransfer(kv_pairs);
 
   // Gather values and publish to subscribed topics
+  hailfire_fpga_msgs::ExtPortArray all_msg;
   unsigned int pair_i = 0;
   for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
   {
-    hailfire_fpga_msgs::ExtPortArray all_msg;
-
     if (publish_all || publish_needed[i])
     {
       hailfire_fpga_msgs::ExtPort single_msg;
@@ -599,10 +600,10 @@ void FPGANode::publishExtPorts()
       if (publish_all)
         all_msg.ext_ports.push_back(single_msg);
     }
-
-    if (publish_all)
-      ext_ports_pub_.publish(all_msg);
   }
+
+  if (publish_all)
+    ext_ports_pub_.publish(all_msg);
 }
 
 void FPGANode::publishTestRegisters()
@@ -809,7 +810,7 @@ void FPGANode::doTransfer(std::vector<FPGAKeyValue> &kv_pairs)
 {
   unsigned int i, j;
 
-  ROS_INFO("doTransfer");
+  ROS_DEBUG("doTransfer");
 
   ROS_DEBUG_STREAM("Request pairs:" << dump_bytes(kv_pairs));
 
