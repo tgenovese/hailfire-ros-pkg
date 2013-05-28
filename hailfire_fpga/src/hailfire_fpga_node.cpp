@@ -31,16 +31,79 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <std_msgs/Bool.h>
+#include <std_msgs/Int16.h>
+#include <std_msgs/UInt16.h>
+#include <std_msgs/UInt32.h>
 #include "hailfire_spi/spi_device.h"
-#include "hailfire_fpga_msgs/FPGAKeyValue.h"
-#include "hailfire_fpga_msgs/FPGATransfer.h"
-#include "hailfire_fpga_msgs/FPGATestRegisters.h"
 #include "hailfire_fpga_msgs/ExtPort.h"
-#include "hailfire_fpga_msgs/LED.h"
+#include "hailfire_fpga_msgs/ExtPortArray.h"
 #include "hailfire_fpga_msgs/Motor.h"
+#include "hailfire_fpga_msgs/MotorArray.h"
 #include "hailfire_fpga_msgs/Odometer.h"
+#include "hailfire_fpga_msgs/OdometerArray.h"
 #include "hailfire_fpga_msgs/Servo.h"
-#include "hailfire_fpga_msgs/FPGA.h"
+#include "hailfire_fpga_msgs/ServoArray.h"
+#include "hailfire_fpga_msgs/TestRegisters.h"
+
+#define HAILFIRE_FPGA_RATE_HZ 50
+#define HAILFIRE_FPGA_MAX_MSG 50
+#define HAILFIRE_FPGA_ODOMETER_NB 4
+#define HAILFIRE_FPGA_EXT_PORT_NB 7
+#define HAILFIRE_FPGA_MOTOR_NB 8
+#define HAILFIRE_FPGA_SERVO_NB 8
+
+// Read odometer counts: 0x11 to 0x14
+#define HAILFIRE_FPGA_ODOMETER_COUNT_BASE 0x10
+
+// Read odometer speeds: 0x21 to 0x24
+#define HAILFIRE_FPGA_ODOMETER_SPEED_BASE 0x20
+
+// Read extension ports: 0x31 to 0x37
+#define HAILFIRE_FPGA_EXT_PORT_BASE 0x30
+
+// Fixed value (0xDEADCODE) for testing
+#define HAILFIRE_FPGA_FIXED_VALUE 0x42
+
+// Read test registers
+#define HAILFIRE_FPGA_TEST_READ_UINT8 0x71
+#define HAILFIRE_FPGA_TEST_READ_UINT16 0x72
+#define HAILFIRE_FPGA_TEST_READ_UINT32 0x73
+#define HAILFIRE_FPGA_TEST_READ_INT8 0x74
+#define HAILFIRE_FPGA_TEST_READ_INT16 0x75
+#define HAILFIRE_FPGA_TEST_READ_INT32 0x76
+
+// FIXME Reset FPGA: 0x81
+#define HAILFIRE_FPGA_RESET 0x81
+
+// Set LEDs
+#define HAILFIRE_FPGA_LED_GREEN 0x82
+#define HAILFIRE_FPGA_LED_YELLOW 0x83
+
+// Set motor speeds: 0x91 to 0x98
+#define HAILFIRE_FPGA_MOTOR_SPEED_BASE 0x90
+
+// Set servo consigns: 0xA1 to 0xA8
+#define HAILFIRE_FPGA_SERVO_CONSIGN_BASE 0xA0
+
+// Set test registers
+#define HAILFIRE_FPGA_TEST_WRITE_UINT8 0xF1
+#define HAILFIRE_FPGA_TEST_WRITE_UINT16 0xF2
+#define HAILFIRE_FPGA_TEST_WRITE_UINT32 0xF3
+#define HAILFIRE_FPGA_TEST_WRITE_INT8 0xF4
+#define HAILFIRE_FPGA_TEST_WRITE_INT16 0xF5
+#define HAILFIRE_FPGA_TEST_WRITE_INT32 0xF6
+
+
+namespace hailfire_fpga
+{
+
+struct FPGAKeyValue
+{
+  uint8_t key;
+  uint8_t _length;            // used by doTransfer
+  std::vector<uint8_t> value; // byte 0 is the MSB
+};
 
 /**
  * @brief Returns an hexadecimal dump of the given byte array.
@@ -50,8 +113,11 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes);
 /**
  * @brief Returns an hexadecimal dump of the given FPGAKeyValue array.
  */
-std::string dump_bytes(std::vector<hailfire_fpga_msgs::FPGAKeyValue> const &bytes);
+std::string dump_bytes(std::vector<FPGAKeyValue> const &kv_pairs);
 
+/**
+ * @brief Returns a vector of bytes from an (u)int(8|16|32) value.
+ */
 std::vector<uint8_t> bytes_from_uint8(uint8_t const &value);
 std::vector<uint8_t> bytes_from_uint16(uint16_t const &value);
 std::vector<uint8_t> bytes_from_uint32(uint32_t const &value);
@@ -59,6 +125,9 @@ std::vector<uint8_t> bytes_from_int8(int8_t const &value);
 std::vector<uint8_t> bytes_from_int16(int16_t const &value);
 std::vector<uint8_t> bytes_from_int32(int32_t const &value);
 
+/**
+ * @brief Returns an (u)int(8|16|32) value from a vector of bytes.
+ */
 uint8_t uint8_from_bytes(std::vector<uint8_t> const &bytes);
 uint16_t uint16_from_bytes(std::vector<uint8_t> const &bytes);
 uint32_t uint32_from_bytes(std::vector<uint8_t> const &bytes);
@@ -68,11 +137,10 @@ int32_t int32_from_bytes(std::vector<uint8_t> const &bytes);
 
 /**
  * @class FPGANode
- * @brief Node class to service FPGA key-value requests.
+ * @brief Message-based ROS interface to the FPGA
  *
- * This class implements a service allowing key-value requests (in ROS messages)
- * to be forwarded to the FPGA (through SPI), whose responses are then returned
- * in the response to the ROS service call.
+ * This class publishes messages on advertised topics with values fetched from
+ * the FPGA, and forwards messages received on subscribed topics to the FPGA.
  *
  */
 class FPGANode
@@ -82,10 +150,11 @@ public:
   /**
    * @brief Constructor.
    *
-   * Creates and configures the SPI device, then advertises the service.
+   * Creates and configures the SPI device, then advertises topics for sensors
+   * and subscribes to topics for actuators.
    *
    * Uses the following parameters from the parameter server:
-   * ~spidev/dev_name        used for SPI device instance (defaults to "spidev1.0")
+   * ~spidev/dev_name        used for SPI device instance (defaults to "spidev1.1")
    * ~spidev/mode            appropriate setter is called if present
    * ~spidev/lsb_first       appropriate setter is called if present
    * ~spidev/bits_per_word   appropriate setter is called if present
@@ -99,46 +168,145 @@ public:
    */
   ~FPGANode();
 
+  /**
+   * @brief Main loop
+   */
+  void spin();
+
 private:
 
   /**
-   * @brief Service handler.
-   *
-   * This method is called by ROS when a request to the service is made.
-   * It transforms the ROS message in a format accepted by the FPGA (Key,
-   * Length, Value encoded byte array), sends it to the FPGA via SPI and
-   * transforms the FPGA response back to a ROS format.
+   * @brief Advertises the topics this node is capable of publishing.
    */
-  bool doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
-                  hailfire_fpga_msgs::FPGATransfer::Response &res);
+  void setupAdvertisements();
 
   /**
-   * @brief Service handler.
-   *
-   * This method is called by ROS when a request to the service is made.
-   * It transforms the ROS message in a format accepted by the FPGA (Key,
-   * Length, Value encoded byte array), sends it to the FPGA via SPI and
-   * transforms the FPGA response back to a ROS format.
+   * @brief Subscribes to topics this node is capable of handling.
    */
-  bool doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
-                       hailfire_fpga_msgs::FPGATestRegisters::Response &res);
+  void setupSubscriptions();
 
   /**
-   * @brief Service handler.
+   * @brief Publishes odometer counts and speeds.
    *
-   * This method is called by ROS when a request to the service is made.
-   * It transforms the ROS message in a format accepted by the FPGA (Key,
-   * Length, Value encoded byte array), sends it to the FPGA via SPI and
-   * transforms the FPGA response back to a ROS format.
+   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * following topics: /odometer/[1-4] and /odometer/all.
+   *
+   * No messages are published on topics without subscribers, neither are the
+   * unused values fetched from the FPGA.
    */
-  bool doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
-                   hailfire_fpga_msgs::FPGA::Response &res);
+  void publishOdometers();
 
-  ros::NodeHandle nh_;                  /**< The ROS node handle */
-  ros::ServiceServer srv1_;             /**< A ROS service handle */
-  ros::ServiceServer srv2_;             /**< A ROS service handle */
-  ros::ServiceServer srv3_;             /**< A ROS service handle */
-  hailfire_spi::SPIDevice *spi_device_; /**< The SPI device instance */
+  /**
+   * @brief Publishes ext port values.
+   *
+   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * following topics: /ext_port/[1-7] and /ext_port/all.
+   *
+   * No messages are published on topics without subscribers, neither are the
+   * unused values fetched from the FPGA.
+   */
+  void publishExtPorts();
+
+  /**
+   * @brief Publishes test register values.
+   *
+   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * /test/fixed and /test/reg_read topics.
+   *
+   * No messages are published on topics without subscribers, neither are the
+   * unused values fetched from the FPGA.
+   */
+  void publishTestRegisters();
+
+  /**
+   * @brief Handles LED on/off messages.
+   *
+   * This method is called by ROS when a message is published on the /led/green
+   * and /led/yellow topics. It transforms and forwards the message to the FPGA.
+   *
+   * In the std_msgs::Bool message, set data to true for "on", false for "off".
+   */
+  void handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg);
+
+  /**
+   * @brief Handles motor consign messages.
+   *
+   * This method is called by ROS when a message is published on the
+   * /motor/[1-8] topics. It transforms and forwards the message to the FPGA.
+   *
+   * In the std_msgs::Int16 message, set data to the signed motor speed consign.
+   *
+   * NB: -1024 <= speed consign < 1024
+   */
+  void handleMotorMsg(uint8_t motor_nb, const std_msgs::Int16::ConstPtr &msg);
+
+  /**
+   * @brief Handles servo consign messages.
+   *
+   * This method is called by ROS when a message is published on the
+   * /servo/[1-8] topics. It transforms and forwards the message to the FPGA.
+   *
+   * In the std_msgs::UInt16 message, set data to the servo position consign.
+   *
+   * Note: 12500 < position consign < 62500 (for most servos), 0 to disable
+   */
+  void handleServoMsg(uint8_t servo_nb, const std_msgs::UInt16::ConstPtr &msg);
+
+  /**
+   * @brief Handles multi-motor consign messages.
+   *
+   * This method is called by ROS when a message is published on the
+   * /motor/combined topic. It transforms and forwards the message to the FPGA.
+   */
+  void handleMotorCombinedMsg(const hailfire_fpga_msgs::MotorArray::ConstPtr &msg);
+
+  /**
+   * @brief Handles multi-servo consign messages.
+   *
+   * This method is called by ROS when a message is published on the
+   * /servo/combined topic. It transforms and forwards the message to the FPGA.
+   */
+  void handleServoCombinedMsg(const hailfire_fpga_msgs::ServoArray::ConstPtr &msg);
+
+  /**
+   * @brief Handles test register write messages.
+   *
+   * This method is called by ROS when a message is published on the
+   * /test/reg_write topic. It transforms and forwards the message to the FPGA.
+   */
+  void handleTestRegistersMsg(const hailfire_fpga_msgs::TestRegisters::ConstPtr &msg);
+
+  /**
+   * @brief Handles the encoding/decoding of FPGA messages and .
+   *
+   * This method is called internally: it transforms requests to a format
+   * accepted by the FPGA (Key, Length, Value encoded byte array), sends it to
+   * the FPGA via SPI and transforms the FPGA response back to a ROS format.
+   */
+  void doTransfer(std::vector<FPGAKeyValue> &kv_pairs);
+
+  ros::NodeHandle nh_;                          /**< The ROS node handle */
+
+  ros::Publisher odometers_pub_;                /**< /odometer/all publisher */
+  std::vector<ros::Publisher> odometer_pub_;    /**< /odometer/[1-4] publishers */
+
+  ros::Publisher ext_ports_pub_;                /**< /ext_port/all publisher */
+  std::vector<ros::Publisher> ext_port_pub_;    /**< /ext_port/[1-7] publishers */
+
+  ros::Subscriber led_green_sub_;               /**< /led/green subscriber */
+  ros::Subscriber led_yellow_sub_;              /**< /led/yellow subscriber */
+
+  ros::Subscriber motors_sub_;                  /**< /motor/combined subscriber */
+  std::vector<ros::Subscriber> motor_sub_;      /**< /motor/[1-8] subscriber */
+
+  ros::Subscriber servos_sub_;                  /**< /servo/combined subscriber */
+  std::vector<ros::Subscriber> servo_sub_;      /**< /servo/[1-8] subscriber */
+
+  ros::Publisher fixed_pub_;                    /**< /test/fixed publisher */
+  ros::Publisher reg_read_pub_;                 /**< /test/reg_read publisher */
+  ros::Subscriber reg_write_sub_;               /**< /test/reg_write subscriber */
+
+  hailfire_spi::SPIDevice *spi_device_;         /**< The SPI device instance */
 };
 
 FPGANode::FPGANode()
@@ -189,9 +357,6 @@ FPGANode::FPGANode()
     spi_device_->setMaxSpeed(max_speed);
   }
 
-  srv1_ = nh_.advertiseService("hailfire_fpga_raw", &FPGANode::doTransfer, this);
-  srv2_ = nh_.advertiseService("hailfire_fpga_test", &FPGANode::doTestRegisters, this);
-  srv3_ = nh_.advertiseService("hailfire_fpga", &FPGANode::doHighLevel, this);
   ROS_INFO("Ready to service FPGA requests");
 }
 
@@ -203,18 +368,461 @@ FPGANode::~FPGANode()
   }
 }
 
-bool FPGANode::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
-                           hailfire_fpga_msgs::FPGATransfer::Response &res)
+void FPGANode::spin()
 {
+  ros::Rate r(HAILFIRE_FPGA_RATE_HZ); // Hz
+  while (nh_.ok())
+  {
+    ros::spinOnce(); // check for incoming messages
+    publishOdometers();
+    publishExtPorts();
+    publishTestRegisters();
+    r.sleep();
+  }
+}
+
+void FPGANode::setupAdvertisements()
+{
+  unsigned int i;
+
+  // /odometer/all
+  ros::NodeHandle nh_odometer("~odometer");
+  odometers_pub_ =
+    nh_odometer.advertise<hailfire_fpga_msgs::OdometerArray>("all", HAILFIRE_FPGA_MAX_MSG);
+
+  // /odometer/[1-4]
+  odometer_pub_.reserve(HAILFIRE_FPGA_ODOMETER_NB);
+  for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
+  {
+    std::ostringstream oss;
+    oss << (i + 1);
+    odometer_pub_.push_back(
+      nh_odometer.advertise<hailfire_fpga_msgs::Odometer>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
+  }
+
+  // /ext_port/all
+  ros::NodeHandle nh_ext_port("~ext_port");
+  ext_ports_pub_ =
+    nh_ext_port.advertise<hailfire_fpga_msgs::ExtPortArray>("all", HAILFIRE_FPGA_MAX_MSG);
+
+  // /ext_port/[1-7]
+  ext_port_pub_.reserve(HAILFIRE_FPGA_EXT_PORT_NB);
+  for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
+  {
+    std::ostringstream oss;
+    oss << (i + 1);
+    ext_port_pub_.push_back(
+      nh_ext_port.advertise<hailfire_fpga_msgs::ExtPort>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
+  }
+
+  // /test/fixed
+  ros::NodeHandle nh_test("~test");
+  fixed_pub_ = nh_test.advertise<std_msgs::UInt32>("fixed", HAILFIRE_FPGA_MAX_MSG);
+
+  // /test/reg_read
+  reg_read_pub_ =
+    nh_test.advertise<hailfire_fpga_msgs::TestRegisters>("reg_read", HAILFIRE_FPGA_MAX_MSG);
+}
+
+void FPGANode::setupSubscriptions()
+{
+  unsigned int i;
+
+  // /led/green and /led/yellow
+  ros::NodeHandle nh_led("~led");
+  led_green_sub_  = nh_led.subscribe<std_msgs::Bool>("green", 1,
+    boost::bind(&FPGANode::handleLedMsg, this, HAILFIRE_FPGA_LED_GREEN, _1));
+  led_yellow_sub_ = nh_led.subscribe<std_msgs::Bool>("yellow", 1,
+    boost::bind(&FPGANode::handleLedMsg, this, HAILFIRE_FPGA_LED_YELLOW, _1));
+
+  // /motor/combined
+  ros::NodeHandle nh_motor("~motor");
+  motors_sub_ = nh_motor.subscribe("combined", 1, &FPGANode::handleMotorCombinedMsg, this);
+
+  // /motor/[1-8]
+  motor_sub_.reserve(HAILFIRE_FPGA_MOTOR_NB);
+  for (i = 0; i < HAILFIRE_FPGA_MOTOR_NB; ++i)
+  {
+    std::ostringstream oss;
+    oss << (i + 1);
+    motor_sub_.push_back(nh_motor.subscribe<std_msgs::Int16>
+        (oss.str(), 1, boost::bind(&FPGANode::handleMotorMsg, this, i + 1, _1)));
+  }
+
+  // /servo/combined
+  ros::NodeHandle nh_servo("~servo");
+  servos_sub_ = nh_servo.subscribe("combined", 1, &FPGANode::handleServoCombinedMsg, this);
+
+  // /servo/[1-8]
+  servo_sub_.reserve(HAILFIRE_FPGA_SERVO_NB);
+  for (i = 0; i < HAILFIRE_FPGA_SERVO_NB; ++i)
+  {
+    std::ostringstream oss;
+    oss << (i + 1);
+    servo_sub_.push_back(nh_servo.subscribe<std_msgs::UInt16>
+        (oss.str(), 1, boost::bind(&FPGANode::handleServoMsg, this, i + 1, _1)));
+  }
+
+  // /test/reg_write
+  ros::NodeHandle nh_test("~test");
+  reg_write_sub_ = nh_test.subscribe("reg_write", 1, &FPGANode::handleTestRegistersMsg, this);
+}
+
+void FPGANode::publishOdometers()
+{
+  unsigned int i;
+
+  // Need to know which topics must be published
+  bool publish_all = odometers_pub_.getNumSubscribers() > 0;
+  std::vector<bool> publish_needed (HAILFIRE_FPGA_ODOMETER_NB, false);
+  for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
+  {
+    publish_needed[i] = odometer_pub_[i].getNumSubscribers() > 0;
+  }
+
+  // Need to know which odometers must be read
+  std::vector<uint8_t> reading_needed;
+  for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
+  {
+    if (publish_all || publish_needed[i])
+      reading_needed.push_back((uint8_t) i + 1);
+  }
+
+  // Nothing to do?
+  if (reading_needed.size() == 0)
+    return;
+
+  // Prepare FPGA request
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.reserve(2 * reading_needed.size());
+  for (i = 0; i < reading_needed.size(); ++i)
+  {
+    // Read int32 count
+    FPGAKeyValue read_count;
+    read_count.key = HAILFIRE_FPGA_ODOMETER_COUNT_BASE + reading_needed[i];
+    read_count.value.assign(4, 0);
+    kv_pairs.push_back(read_count);
+
+    // Read int32 speed
+    FPGAKeyValue read_speed;
+    read_speed.key = HAILFIRE_FPGA_ODOMETER_SPEED_BASE + reading_needed[i];
+    read_speed.value.assign(4, 0);
+    kv_pairs.push_back(read_speed);
+  }
+
+  doTransfer(kv_pairs);
+
+  // Gather values and publish to subscribed topics
+  unsigned int pair_i = 0;
+  for (i = 0; i < HAILFIRE_FPGA_ODOMETER_NB; ++i)
+  {
+    hailfire_fpga_msgs::OdometerArray all_msg;
+
+    if (publish_all || publish_needed[i])
+    {
+      hailfire_fpga_msgs::Odometer single_msg;
+      single_msg.count = int32_from_bytes(kv_pairs[pair_i++].value);
+      single_msg.speed = int32_from_bytes(kv_pairs[pair_i++].value);
+
+      if (publish_needed[i])
+        odometer_pub_[i].publish(single_msg);
+
+      if (publish_all)
+        all_msg.odometers.push_back(single_msg);
+    }
+
+    if (publish_all)
+      odometers_pub_.publish(all_msg);
+  }
+}
+
+void FPGANode::publishExtPorts()
+{
+  unsigned int i;
+
+  // Need to know which topics must be published
+  bool publish_all = ext_ports_pub_.getNumSubscribers() > 0;
+  std::vector<bool> publish_needed (HAILFIRE_FPGA_EXT_PORT_NB, false);
+  for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
+  {
+    publish_needed[i] = ext_port_pub_[i].getNumSubscribers() > 0;
+  }
+
+  // Need to know which ext_ports must be read
+  std::vector<uint8_t> reading_needed;
+  for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
+  {
+    if (publish_all || publish_needed[i])
+      reading_needed.push_back((uint8_t) i + 1);
+  }
+
+  // Nothing to do?
+  if (reading_needed.size() == 0)
+    return;
+
+  // Prepare FPGA request
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.reserve(reading_needed.size());
+  for (i = 0; i < reading_needed.size(); ++i)
+  {
+    // Read uint8 port
+    FPGAKeyValue read_port;
+    read_port.key = HAILFIRE_FPGA_EXT_PORT_BASE + reading_needed[i];
+    read_port.value.assign(1, 0);
+    kv_pairs.push_back(read_port);
+  }
+
+  doTransfer(kv_pairs);
+
+  // Gather values and publish to subscribed topics
+  unsigned int pair_i = 0;
+  for (i = 0; i < HAILFIRE_FPGA_EXT_PORT_NB; ++i)
+  {
+    hailfire_fpga_msgs::ExtPortArray all_msg;
+
+    if (publish_all || publish_needed[i])
+    {
+      hailfire_fpga_msgs::ExtPort single_msg;
+      uint8_t port = uint8_from_bytes(kv_pairs[pair_i++].value);
+      single_msg.pins[0] = (port & 0x01) ? true : false;
+      single_msg.pins[1] = (port & 0x02) ? true : false;
+      single_msg.pins[2] = (port & 0x04) ? true : false;
+      single_msg.pins[3] = (port & 0x08) ? true : false;
+      single_msg.pins[4] = (port & 0x10) ? true : false;
+      single_msg.pins[5] = (port & 0x20) ? true : false;
+      single_msg.pins[6] = (port & 0x40) ? true : false;
+      single_msg.pins[7] = (port & 0x80) ? true : false;
+
+      if (publish_needed[i])
+        ext_port_pub_[i].publish(single_msg);
+
+      if (publish_all)
+        all_msg.ext_ports.push_back(single_msg);
+    }
+
+    if (publish_all)
+      ext_ports_pub_.publish(all_msg);
+  }
+}
+
+void FPGANode::publishTestRegisters()
+{
+  std::vector<FPGAKeyValue> kv_pairs;
+
+  if (reg_read_pub_.getNumSubscribers() > 0)
+  {
+    // Read uint8 test register
+    FPGAKeyValue read_uint8;
+    read_uint8.key = HAILFIRE_FPGA_TEST_READ_UINT8;
+    read_uint8.value.assign(1, 0);
+
+    // Read uint16 test register
+    FPGAKeyValue read_uint16;
+    read_uint16.key = HAILFIRE_FPGA_TEST_READ_UINT16;
+    read_uint16.value.assign(2, 0);
+
+    // Read uint32 test register
+    FPGAKeyValue read_uint32;
+    read_uint32.key = HAILFIRE_FPGA_TEST_READ_UINT32;
+    read_uint32.value.assign(4, 0);
+
+    // Read int8 test register
+    FPGAKeyValue read_int8;
+    read_int8.key = HAILFIRE_FPGA_TEST_READ_INT8;
+    read_int8.value.assign(1, 0);
+
+    // Read int16 test register
+    FPGAKeyValue read_int16;
+    read_int16.key = HAILFIRE_FPGA_TEST_READ_INT16;
+    read_int16.value.assign(2, 0);
+
+    // Read int32 test register
+    FPGAKeyValue read_int32;
+    read_int32.key = HAILFIRE_FPGA_TEST_READ_INT32;
+    read_int32.value.assign(4, 0);
+
+    kv_pairs.reserve(7);
+    kv_pairs.push_back(read_uint8);
+    kv_pairs.push_back(read_uint16);
+    kv_pairs.push_back(read_uint32);
+    kv_pairs.push_back(read_int8);
+    kv_pairs.push_back(read_int16);
+    kv_pairs.push_back(read_int32);
+  }
+
+  if (fixed_pub_.getNumSubscribers() > 0)
+  {
+    // Read fixed uint32 test register
+    FPGAKeyValue read_fixed;
+    read_fixed.key = HAILFIRE_FPGA_FIXED_VALUE;
+    read_fixed.value.assign(4, 0);
+    kv_pairs.push_back(read_fixed);
+  }
+
+  // Nothing to do?
+  if (kv_pairs.size() == 0)
+    return;
+
+  doTransfer(kv_pairs);
+
+  // Get the responses
+  unsigned int pair_i = 0;
+  if (reg_read_pub_.getNumSubscribers() > 0)
+  {
+    hailfire_fpga_msgs::TestRegisters msg;
+    msg.uint8_value  = uint8_from_bytes(kv_pairs[pair_i++].value);
+    msg.uint16_value = uint16_from_bytes(kv_pairs[pair_i++].value);
+    msg.uint32_value = uint32_from_bytes(kv_pairs[pair_i++].value);
+    msg.int8_value   = int8_from_bytes(kv_pairs[pair_i++].value);
+    msg.int16_value  = int16_from_bytes(kv_pairs[pair_i++].value);
+    msg.int32_value  = int32_from_bytes(kv_pairs[pair_i++].value);
+    reg_read_pub_.publish(msg);
+  }
+
+  if (fixed_pub_.getNumSubscribers() > 0)
+  {
+    std_msgs::UInt32 msg;
+    msg.data = uint32_from_bytes(kv_pairs[pair_i++].value);
+    fixed_pub_.publish(msg);
+  }
+}
+
+void FPGANode::handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg)
+{
+  // Set led on/off bool
+  FPGAKeyValue set_led;
+  set_led.key = led_key;
+  set_led.value = bytes_from_uint8(msg->data ? 1 : 0);
+
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.push_back(set_led);
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::handleMotorMsg(uint8_t motor_nb, const std_msgs::Int16::ConstPtr &msg)
+{
+  // Set int16 motor speed
+  FPGAKeyValue set_motor;
+  set_motor.key = HAILFIRE_FPGA_MOTOR_SPEED_BASE + motor_nb;
+  set_motor.value = bytes_from_int16(msg->data);
+
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.push_back(set_motor);
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::handleServoMsg(uint8_t servo_nb, const std_msgs::UInt16::ConstPtr &msg)
+{
+  // Set uint16 servo consign speed
+  FPGAKeyValue set_servo;
+  set_servo.key = HAILFIRE_FPGA_SERVO_CONSIGN_BASE + servo_nb;
+  set_servo.value = bytes_from_uint16(msg->data);
+
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.push_back(set_servo);
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::handleMotorCombinedMsg(const hailfire_fpga_msgs::MotorArray::ConstPtr &msg)
+{
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.reserve(msg->motors.size());
+
+  for (unsigned int i = 0; i < msg->motors.size(); ++i)
+  {
+    // Set int16 motor speed
+    FPGAKeyValue set_motor;
+    set_motor.key = HAILFIRE_FPGA_MOTOR_SPEED_BASE + msg->motors[i].key;
+    set_motor.value = bytes_from_int16(msg->motors[i].speed);
+    kv_pairs.push_back(set_motor);
+  }
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::handleServoCombinedMsg(const hailfire_fpga_msgs::ServoArray::ConstPtr &msg)
+{
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.reserve(msg->servos.size());
+
+  for (unsigned int i = 0; i < msg->servos.size(); ++i)
+  {
+    // Set uint16 servo consign speed
+    FPGAKeyValue set_servo;
+    set_servo.key = HAILFIRE_FPGA_SERVO_CONSIGN_BASE + msg->servos[i].key;
+    set_servo.value = bytes_from_uint16(msg->servos[i].consign);
+    kv_pairs.push_back(set_servo);
+  }
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::handleTestRegistersMsg(const hailfire_fpga_msgs::TestRegisters::ConstPtr &msg)
+{
+  std::vector<FPGAKeyValue> kv_pairs;
+
+  // Set uint8 test register with new value
+  FPGAKeyValue set_uint8;
+  set_uint8.key = HAILFIRE_FPGA_TEST_WRITE_UINT8;
+  set_uint8.value = bytes_from_uint8(msg->uint8_value);
+
+  // Set uint16 test register with new value
+  FPGAKeyValue set_uint16;
+  set_uint16.key = HAILFIRE_FPGA_TEST_WRITE_UINT16;
+  set_uint16.value = bytes_from_uint16(msg->uint16_value);
+
+  // Set uint32 test register with new value
+  FPGAKeyValue set_uint32;
+  set_uint32.key = HAILFIRE_FPGA_TEST_WRITE_UINT32;
+  set_uint32.value = bytes_from_uint32(msg->uint32_value);
+
+  // Set int8 test register with new value
+  FPGAKeyValue set_int8;
+  set_int8.key = HAILFIRE_FPGA_TEST_WRITE_INT8;
+  set_int8.value = bytes_from_int8(msg->int8_value);
+
+  // Set int16 test register with new value
+  FPGAKeyValue set_int16;
+  set_int16.key = HAILFIRE_FPGA_TEST_WRITE_INT16;
+  set_int16.value = bytes_from_int16(msg->int16_value);
+
+  // Set int32 test register with new value
+  FPGAKeyValue set_int32;
+  set_int32.key = HAILFIRE_FPGA_TEST_WRITE_INT32;
+  set_int32.value = bytes_from_int32(msg->int32_value);
+
+  kv_pairs.reserve(6);
+  kv_pairs.push_back(set_uint8);
+  kv_pairs.push_back(set_uint16);
+  kv_pairs.push_back(set_uint32);
+  kv_pairs.push_back(set_int8);
+  kv_pairs.push_back(set_int16);
+  kv_pairs.push_back(set_int32);
+
+  doTransfer(kv_pairs);
+}
+
+void FPGANode::doTransfer(std::vector<FPGAKeyValue> &kv_pairs)
+{
+  unsigned int i, j;
+
   ROS_INFO("doTransfer");
 
-  ROS_DEBUG_STREAM("Request pairs:" << dump_bytes(req.pairs));
+  ROS_DEBUG_STREAM("Request pairs:" << dump_bytes(kv_pairs));
 
   // Count required number of bytes for KLV-encoded vector
   unsigned int nb_bytes = 0;
-  for (unsigned int i = 0; i < req.pairs.size(); ++i)
+  for (i = 0; i < kv_pairs.size(); ++i)
   {
-    nb_bytes += 2 + req.pairs[i].value.size(); // key + length + value
+    // The length being 1-byte only, the value must not be longer than 256
+    // bytes, or it will be truncated.
+    kv_pairs[i]._length = 0xFF & kv_pairs[i].value.size();
+
+    // 1-byte key + 1-byte length + value
+    nb_bytes += 2 + kv_pairs[i]._length;
   }
 
   // KLV-encode given keys and values
@@ -222,20 +830,12 @@ bool FPGANode::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
   tx_rx_bytes.reserve(nb_bytes);
 
   // Create KLV-encoded vector
-  for (unsigned int i = 0; i < req.pairs.size(); ++i)
+  for (i = 0; i < kv_pairs.size(); ++i)
   {
-    // Key
-    tx_rx_bytes.push_back(req.pairs[i].key);
-
-    // Length
-    uint8_t length = 0xFF & req.pairs[i].value.size();
-    tx_rx_bytes.push_back(length);
-
-    // Value
-    for (unsigned int j = 0; j < length; ++j)
-    {
-      tx_rx_bytes.push_back(req.pairs[i].value[j]);
-    }
+    tx_rx_bytes.push_back(kv_pairs[i].key);
+    tx_rx_bytes.push_back(kv_pairs[i]._length);
+    for (j = 0; j < kv_pairs[i]._length; ++j) // byte 0 is the MSB
+      tx_rx_bytes.push_back(kv_pairs[i].value[j]);
   }
 
   ROS_DEBUG_STREAM("tx bytes:" << dump_bytes(tx_rx_bytes));
@@ -243,245 +843,23 @@ bool FPGANode::doTransfer(hailfire_fpga_msgs::FPGATransfer::Request &req,
   // Synchronous SPI transfer, using the same vector to store the received
   // bytes (same length so valid memory space)
   if (spi_device_)
-  {
     spi_device_->doSyncTransfer(&tx_rx_bytes[0], &tx_rx_bytes[0], nb_bytes);
-  }
 
   ROS_DEBUG_STREAM("rx bytes:" << dump_bytes(tx_rx_bytes));
 
-  // Reconcile received values with the keys and length of the request
+  // Insert received values in pairs vector
   unsigned int rx_offset = 0;
-  for (unsigned int i = 0; i < req.pairs.size(); ++i)
+  for (i = 0; i < kv_pairs.size(); ++i)
   {
-    hailfire_fpga_msgs::FPGAKeyValue pair_i;
-
-    // Key
-    pair_i.key = req.pairs[i].key;
-    ++rx_offset;
-
-    // Length
-    uint8_t length = 0xFF & req.pairs[i].value.size();
-    ++rx_offset;
+    // account for key and length (null) bytes in response
+    rx_offset += 2;
 
     // Value
-    pair_i.value.reserve(length);
-    for (unsigned int j = 0; j < length; ++j, ++rx_offset)
-    {
-      pair_i.value.push_back(rx_offset < nb_bytes ? tx_rx_bytes[rx_offset] : 0);
-    }
-
-    res.pairs.push_back(pair_i);
+    for (j = 0; j < kv_pairs[i]._length; ++j, ++rx_offset)
+      kv_pairs[i].value[j] = tx_rx_bytes[rx_offset];
   }
 
-  ROS_DEBUG_STREAM("Response pairs:" << dump_bytes(res.pairs));
-
-  return true;
-}
-
-bool FPGANode::doTestRegisters(hailfire_fpga_msgs::FPGATestRegisters::Request &req,
-                                hailfire_fpga_msgs::FPGATestRegisters::Response &res)
-{
-  ROS_INFO("doTestRegisters");
-
-  // Read fixed uint32 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_fixed;
-  read_fixed.key = hailfire_fpga_msgs::FPGAKeyValue::TEST_VALUE;
-  read_fixed.value.assign(4, 0);
-
-  // Read uint8 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_uint8;
-  read_uint8.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT8;
-  read_uint8.value.assign(1, 0);
-
-  // Read uint16 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_uint16;
-  read_uint16.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT16;
-  read_uint16.value.assign(2, 0);
-
-  // Read uint32 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_uint32;
-  read_uint32.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_UINT32;
-  read_uint32.value.assign(4, 0);
-
-  // Read int8 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_int8;
-  read_int8.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT8;
-  read_int8.value.assign(1, 0);
-
-  // Read int16 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_int16;
-  read_int16.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT16;
-  read_int16.value.assign(2, 0);
-
-  // Read int32 test register
-  hailfire_fpga_msgs::FPGAKeyValue read_int32;
-  read_int32.key = hailfire_fpga_msgs::FPGAKeyValue::READ_TEST_REGISTER_INT32;
-  read_int32.value.assign(4, 0);
-
-  // Set uint8 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_uint8;
-  set_uint8.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT8;
-  set_uint8.value = bytes_from_uint8(req.new_uint8);
-
-  // Set uint16 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_uint16;
-  set_uint16.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT16;
-  set_uint16.value = bytes_from_uint16(req.new_uint16);
-
-  // Set uint32 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_uint32;
-  set_uint32.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_UINT32;
-  set_uint32.value = bytes_from_uint32(req.new_uint32);
-
-  // Set int8 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_int8;
-  set_int8.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT8;
-  set_int8.value = bytes_from_int8(req.new_int8);
-
-  // Set int16 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_int16;
-  set_int16.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT16;
-  set_int16.value = bytes_from_int16(req.new_int16);
-
-  // Set int32 test register with new value
-  hailfire_fpga_msgs::FPGAKeyValue set_int32;
-  set_int32.key = hailfire_fpga_msgs::FPGAKeyValue::WRITE_TEST_REGISTER_INT32;
-  set_int32.value = bytes_from_int32(req.new_int32);
-
-  // Prepare transfer
-  hailfire_fpga_msgs::FPGATransfer tr;
-  tr.request.pairs.reserve(13);
-  tr.request.pairs.push_back(read_fixed);
-  tr.request.pairs.push_back(read_uint8);
-  tr.request.pairs.push_back(read_uint16);
-  tr.request.pairs.push_back(read_uint32);
-  tr.request.pairs.push_back(read_int8);
-  tr.request.pairs.push_back(read_int16);
-  tr.request.pairs.push_back(read_int32);
-  tr.request.pairs.push_back(set_uint8);
-  tr.request.pairs.push_back(set_uint16);
-  tr.request.pairs.push_back(set_uint32);
-  tr.request.pairs.push_back(set_int8);
-  tr.request.pairs.push_back(set_int16);
-  tr.request.pairs.push_back(set_int32);
-
-  if (!doTransfer(tr.request, tr.response))
-  {
-    return false;
-  }
-
-  // Get the responses
-  res.fixed_val = uint32_from_bytes(tr.response.pairs[0].value);
-  res.prev_uint8 = uint8_from_bytes(tr.response.pairs[1].value);
-  res.prev_uint16 = uint16_from_bytes(tr.response.pairs[2].value);
-  res.prev_uint32 = uint32_from_bytes(tr.response.pairs[3].value);
-  res.prev_int8 = int8_from_bytes(tr.response.pairs[4].value);
-  res.prev_int16 = int16_from_bytes(tr.response.pairs[5].value);
-  res.prev_int32 = int32_from_bytes(tr.response.pairs[6].value);
-
-  return true;
-}
-
-bool FPGANode::doHighLevel(hailfire_fpga_msgs::FPGA::Request &req,
-                            hailfire_fpga_msgs::FPGA::Response &res)
-{
-  ROS_INFO("doHighLevel");
-  unsigned int i;
-
-  hailfire_fpga_msgs::FPGATransfer tr;
-
-  for (i = 0; i < req.odometers.size(); ++i)
-  {
-    // Read int32 count
-    hailfire_fpga_msgs::FPGAKeyValue read_count;
-    read_count.key = hailfire_fpga_msgs::FPGAKeyValue::ODOMETER_COUNT_BASE + req.odometers[i].key;
-    read_count.value.assign(4, 0);
-    tr.request.pairs.push_back(read_count);
-
-    // Read int32 speed
-    hailfire_fpga_msgs::FPGAKeyValue read_speed;
-    read_speed.key = hailfire_fpga_msgs::FPGAKeyValue::ODOMETER_SPEED_BASE + req.odometers[i].key;
-    read_speed.value.assign(4, 0);
-    tr.request.pairs.push_back(read_speed);
-  }
-
-  for (i = 0; i < req.ext_ports.size(); ++i)
-  {
-    // Read uint8 port
-    hailfire_fpga_msgs::FPGAKeyValue read_port;
-    read_port.key = hailfire_fpga_msgs::FPGAKeyValue::EXT_PORT_VALUE_BASE + req.ext_ports[i].key;
-    read_port.value.assign(1, 0);
-    tr.request.pairs.push_back(read_port);
-  }
-
-  for (i = 0; i < req.leds.size(); ++i)
-  {
-    // Set bool led
-    hailfire_fpga_msgs::FPGAKeyValue set_led;
-    set_led.key = hailfire_fpga_msgs::FPGAKeyValue::LED_BASE + req.leds[i].key;
-    set_led.value = bytes_from_uint8(req.leds[i].on ? 1 : 0);
-    tr.request.pairs.push_back(set_led);
-  }
-
-  for (i = 0; i < req.motors.size(); ++i)
-  {
-    // Set int16 motor speed
-    hailfire_fpga_msgs::FPGAKeyValue set_motor;
-    set_motor.key = hailfire_fpga_msgs::FPGAKeyValue::MOTOR_SPEED_BASE + req.motors[i].key;
-    set_motor.value = bytes_from_int16(req.motors[i].speed);
-    tr.request.pairs.push_back(set_motor);
-  }
-
-  for (i = 0; i < req.servos.size(); ++i)
-  {
-    // Set uint16 servo consign speed
-    hailfire_fpga_msgs::FPGAKeyValue set_servo;
-    set_servo.key = hailfire_fpga_msgs::FPGAKeyValue::SERVO_CONSIGN_BASE + req.servos[i].key;
-    set_servo.value = bytes_from_uint16(req.servos[i].consign);
-    tr.request.pairs.push_back(set_servo);
-  }
-
-  if (!doTransfer(tr.request, tr.response))
-  {
-    return false;
-  }
-
-  unsigned int pair_i = 0;
-  for (i = 0; i < req.odometers.size(); ++i)
-  {
-    hailfire_fpga_msgs::Odometer odometer;
-    odometer.key = req.odometers[i].key;
-    odometer.count = int32_from_bytes(tr.response.pairs[pair_i++].value);
-    odometer.speed = int32_from_bytes(tr.response.pairs[pair_i++].value);
-    res.odometers.push_back(odometer);
-  }
-
-  for (i = 0; i < req.ext_ports.size(); ++i)
-  {
-    hailfire_fpga_msgs::ExtPort ext_port;
-    ext_port.key = req.ext_ports[i].key;
-    uint8_t port = uint8_from_bytes(tr.response.pairs[pair_i++].value);
-    ext_port.pins[0] = (port & 0x01) ? true : false;
-    ext_port.pins[1] = (port & 0x02) ? true : false;
-    ext_port.pins[2] = (port & 0x04) ? true : false;
-    ext_port.pins[3] = (port & 0x08) ? true : false;
-    ext_port.pins[4] = (port & 0x10) ? true : false;
-    ext_port.pins[5] = (port & 0x20) ? true : false;
-    ext_port.pins[6] = (port & 0x40) ? true : false;
-    ext_port.pins[7] = (port & 0x80) ? true : false;
-    res.ext_ports.push_back(ext_port);
-  }
-
-  return true;
-}
-
-int main(int argc, char **argv)
-{
-  ros::init(argc, argv, "hailfire_fpga");
-  FPGANode hailfire_fpga;
-  ros::spin();
-
-  return 0;
+  ROS_DEBUG_STREAM("Response pairs:" << dump_bytes(kv_pairs));
 }
 
 std::string dump_bytes(std::vector<uint8_t> const &bytes)
@@ -496,18 +874,18 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes)
   return ss.str();
 }
 
-std::string dump_bytes(std::vector<hailfire_fpga_msgs::FPGAKeyValue> const &bytes)
+std::string dump_bytes(std::vector<FPGAKeyValue> const &kv_pairs)
 {
   std::stringstream ss;
   ss << std::setfill('0');
   ss << std::hex;
-  for (unsigned int i = 0; i < bytes.size(); ++i)
+  for (unsigned int i = 0; i < kv_pairs.size(); ++i)
   {
-    ss << std::endl << "  key: 0x" << std::setw(2) << +bytes[i].key;
+    ss << std::endl << "  key: 0x" << std::setw(2) << +kv_pairs[i].key;
     ss << std::endl << "  value:";
-    for (unsigned int j = 0; j < bytes[i].value.size(); ++j)
+    for (unsigned int j = 0; j < kv_pairs[i].value.size(); ++j)
     {
-      ss << std::endl << "    0x" << std::setw(2) << +bytes[i].value[j];
+      ss << std::endl << "    0x" << std::setw(2) << +kv_pairs[i].value[j];
     }
   }
   return ss.str();
@@ -596,3 +974,14 @@ std::vector<uint8_t> bytes_from_int32(int32_t const &value)
   return bytes_from_uint32(uvalue);
 }
 
+}
+
+int main(int argc, char **argv)
+{
+  ros::init(argc, argv, "hailfire_fpga");
+
+  hailfire_fpga::FPGANode fpga_node;
+  fpga_node.spin();
+
+  return 0;
+}

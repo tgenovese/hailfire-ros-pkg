@@ -11,6 +11,7 @@
   <depend package="hailfire_fpga_msgs"/>
   <depend package="hailfire_spi"/>
   <depend package="roscpp"/>
+  <depend package="std_msgs"/>
 
 </package>
 
