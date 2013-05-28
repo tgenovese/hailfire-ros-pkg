@@ -32,6 +32,7 @@
 #include <string>
 #include <vector>
 #include <std_msgs/Bool.h>
+#include <std_msgs/Empty.h>
 #include <std_msgs/Int16.h>
 #include <std_msgs/UInt16.h>
 #include <std_msgs/UInt32.h>
@@ -73,7 +74,7 @@
 #define HAILFIRE_FPGA_TEST_READ_INT16 0x75
 #define HAILFIRE_FPGA_TEST_READ_INT32 0x76
 
-// FIXME Reset FPGA: 0x81
+// Reset FPGA: 0x81
 #define HAILFIRE_FPGA_RESET 0x81
 
 // Set LEDs
@@ -219,6 +220,14 @@ private:
   void publishTestRegisters();
 
   /**
+   * @brief Handle reset message.
+   *
+   * This method is called by ROS when a message is published on the /reset
+   * topic. It transforms and forwards the message to the FPGA.
+   */
+  void handleReset(const std_msgs::Empty::ConstPtr &empty);
+
+  /**
    * @brief Handles LED on/off messages.
    *
    * This method is called by ROS when a message is published on the /led/green
@@ -292,6 +301,8 @@ private:
 
   ros::Publisher ext_ports_pub_;                /**< /ext/all publisher */
   std::vector<ros::Publisher> ext_port_pub_;    /**< /ext/port[1-7] publishers */
+
+  ros::Subscriber reset_sub_;                   /**< /reset subscriber */
 
   ros::Subscriber led_green_sub_;               /**< /led/green subscriber */
   ros::Subscriber led_yellow_sub_;              /**< /led/yellow subscriber */
@@ -430,6 +441,10 @@ void FPGANode::setupAdvertisements()
 void FPGANode::setupSubscriptions()
 {
   unsigned int i;
+
+  // /reset
+  ros::NodeHandle nh_reset("~");
+  reset_sub_ = nh_reset.subscribe("reset", 1, &FPGANode::handleReset, this);
 
   // /led/green and /led/yellow
   ros::NodeHandle nh_led("~led");
@@ -686,6 +701,18 @@ void FPGANode::publishTestRegisters()
     msg.data = uint32_from_bytes(kv_pairs[pair_i++].value);
     fixed_pub_.publish(msg);
   }
+}
+
+void FPGANode::handleReset(const std_msgs::Empty::ConstPtr &empty)
+{
+  FPGAKeyValue reset;
+  reset.key = HAILFIRE_FPGA_RESET;
+  reset.value = bytes_from_uint8(1);
+
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.push_back(reset);
+
+  doTransfer(kv_pairs);
 }
 
 void FPGANode::handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg)
