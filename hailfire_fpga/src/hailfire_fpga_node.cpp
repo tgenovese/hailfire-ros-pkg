@@ -39,6 +39,8 @@
 #include "hailfire_spi/spi_device.h"
 #include "hailfire_fpga_msgs/ExtPort.h"
 #include "hailfire_fpga_msgs/ExtPortArray.h"
+#include "hailfire_fpga_msgs/IRSensor.h"
+#include "hailfire_fpga_msgs/IRSensorArray.h"
 #include "hailfire_fpga_msgs/Motor.h"
 #include "hailfire_fpga_msgs/MotorArray.h"
 #include "hailfire_fpga_msgs/Odometer.h"
@@ -49,22 +51,22 @@
 
 #define HAILFIRE_FPGA_RATE_HZ 50
 #define HAILFIRE_FPGA_MAX_MSG 50
+
+// Read odometer counts: 0x11 to 0x14 and speeds: 0x21 to 0x24
 #define HAILFIRE_FPGA_ODOMETER_NB 4
-#define HAILFIRE_FPGA_EXT_PORT_NB 7
-#define HAILFIRE_FPGA_MOTOR_NB 8
-#define HAILFIRE_FPGA_SERVO_NB 8
-
-// Read odometer counts: 0x11 to 0x14
 #define HAILFIRE_FPGA_ODOMETER_COUNT_BASE 0x10
-
-// Read odometer speeds: 0x21 to 0x24
 #define HAILFIRE_FPGA_ODOMETER_SPEED_BASE 0x20
 
 // Read extension ports: 0x31 to 0x37
+#define HAILFIRE_FPGA_EXT_PORT_NB 7
 #define HAILFIRE_FPGA_EXT_PORT_BASE 0x30
 
 // Fixed value (0xDEADCODE) for testing
 #define HAILFIRE_FPGA_FIXED_VALUE 0x42
+
+// Read IR sensors: 0x51 to 0x58
+#define HAILFIRE_FPGA_IR_SENSOR_NB 8
+#define HAILFIRE_FPGA_IR_SENSOR_BASE 0x50
 
 // Read test registers
 #define HAILFIRE_FPGA_TEST_READ_UINT8 0x71
@@ -82,9 +84,11 @@
 #define HAILFIRE_FPGA_LED_YELLOW 0x83
 
 // Set motor speeds: 0x91 to 0x98
+#define HAILFIRE_FPGA_MOTOR_NB 8
 #define HAILFIRE_FPGA_MOTOR_SPEED_BASE 0x90
 
 // Set servo consigns: 0xA1 to 0xA8
+#define HAILFIRE_FPGA_SERVO_NB 8
 #define HAILFIRE_FPGA_SERVO_CONSIGN_BASE 0xA0
 
 // Set test registers
@@ -209,6 +213,17 @@ private:
   void publishExtPorts();
 
   /**
+   * @brief Publishes IR sensor values.
+   *
+   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * following topics: /ir_sensor/port[1-8] and /ir_sensor/all.
+   *
+   * No messages are published on topics without subscribers, neither are the
+   * unused values fetched from the FPGA.
+   */
+  void publishIRSensors();
+
+  /**
    * @brief Publishes test register values.
    *
    * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
@@ -302,6 +317,9 @@ private:
   ros::Publisher ext_ports_pub_;                /**< /ext/all publisher */
   std::vector<ros::Publisher> ext_port_pub_;    /**< /ext/port[1-7] publishers */
 
+  ros::Publisher ir_sensors_pub_;               /**< /ir_sensor/all publisher */
+  std::vector<ros::Publisher> ir_sensor_pub_;   /**< /ir_sensor/port[1-8] publishers */
+
   ros::Subscriber reset_sub_;                   /**< /reset subscriber */
 
   ros::Subscriber led_green_sub_;               /**< /led/green subscriber */
@@ -390,6 +408,7 @@ void FPGANode::spin()
     ros::spinOnce(); // check for incoming messages
     publishOdometers();
     publishExtPorts();
+    publishIRSensors();
     publishTestRegisters();
     r.sleep();
   }
@@ -427,6 +446,21 @@ void FPGANode::setupAdvertisements()
     oss << "port" << (i + 1);
     ext_port_pub_.push_back(
       nh_ext_port.advertise<hailfire_fpga_msgs::ExtPort>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
+  }
+
+  // /ir_sensor/all
+  ros::NodeHandle nh_ir_sensor("~ir_sensor");
+  ir_sensors_pub_ =
+    nh_ir_sensor.advertise<hailfire_fpga_msgs::IRSensorArray>("all", HAILFIRE_FPGA_MAX_MSG);
+
+  // /ir_sensor/port[1-8]
+  ir_sensor_pub_.reserve(HAILFIRE_FPGA_IR_SENSOR_NB);
+  for (i = 0; i < HAILFIRE_FPGA_IR_SENSOR_NB; ++i)
+  {
+    std::ostringstream oss;
+    oss << "port" << (i + 1);
+    ir_sensor_pub_.push_back(
+      nh_ir_sensor.advertise<hailfire_fpga_msgs::IRSensor>(oss.str(), HAILFIRE_FPGA_MAX_MSG));
   }
 
   // /test/fixed
@@ -619,6 +653,66 @@ void FPGANode::publishExtPorts()
 
   if (publish_all)
     ext_ports_pub_.publish(all_msg);
+}
+
+void FPGANode::publishIRSensors()
+{
+  unsigned int i;
+
+  // Need to know which topics must be published
+  bool publish_all = ir_sensors_pub_.getNumSubscribers() > 0;
+  std::vector<bool> publish_needed (HAILFIRE_FPGA_IR_SENSOR_NB, false);
+  for (i = 0; i < HAILFIRE_FPGA_IR_SENSOR_NB; ++i)
+  {
+    publish_needed[i] = ir_sensor_pub_[i].getNumSubscribers() > 0;
+  }
+
+  // Need to know which IR sensors must be read
+  std::vector<uint8_t> reading_needed;
+  for (i = 0; i < HAILFIRE_FPGA_IR_SENSOR_NB; ++i)
+  {
+    if (publish_all || publish_needed[i])
+      reading_needed.push_back((uint8_t) i + 1);
+  }
+
+  // Nothing to do?
+  if (reading_needed.size() == 0)
+    return;
+
+  // Prepare FPGA request
+  std::vector<FPGAKeyValue> kv_pairs;
+  kv_pairs.reserve(2 * reading_needed.size());
+  for (i = 0; i < reading_needed.size(); ++i)
+  {
+    // Read uint16 value (really, 10-bit value)
+    FPGAKeyValue read_ir_sensor;
+    read_ir_sensor.key = HAILFIRE_FPGA_IR_SENSOR_BASE + reading_needed[i];
+    read_ir_sensor.value.assign(2, 0);
+    kv_pairs.push_back(read_ir_sensor);
+  }
+
+  doTransfer(kv_pairs);
+
+  // Gather values and publish to subscribed topics
+  hailfire_fpga_msgs::IRSensorArray all_msg;
+  unsigned int pair_i = 0;
+  for (i = 0; i < HAILFIRE_FPGA_IR_SENSOR_NB; ++i)
+  {
+    if (publish_all || publish_needed[i])
+    {
+      hailfire_fpga_msgs::IRSensor single_msg;
+      single_msg.value = int16_from_bytes(kv_pairs[pair_i++].value);
+
+      if (publish_needed[i])
+        ir_sensor_pub_[i].publish(single_msg);
+
+      if (publish_all)
+        all_msg.ir_sensors.push_back(single_msg);
+    }
+  }
+
+  if (publish_all)
+    ir_sensors_pub_.publish(all_msg);
 }
 
 void FPGANode::publishTestRegisters()
