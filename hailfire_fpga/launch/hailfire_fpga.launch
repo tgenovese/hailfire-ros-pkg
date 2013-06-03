@@ -7,5 +7,9 @@
     <!-- <param name="spidev/lsb_first" type="bool" value="false"/> -->
     <!-- <param name="spidev/bits_per_word" type="int" value="8"/> -->
     <!-- <param name="spidev/max_speed" type="int" value="48000000"/> -->
+    <param name="odometer_rate" type="int" value="30"/>
+    <param name="ext_rate" type="int" value="50"/>
+    <param name="ir_sensor_rate" type="int" value="25"/>
+    <param name="test_rate" type="int" value="10"/>
   </node>
 </launch>

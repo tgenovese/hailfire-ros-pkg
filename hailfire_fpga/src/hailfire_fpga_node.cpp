@@ -49,7 +49,6 @@
 #include "hailfire_fpga_msgs/ServoArray.h"
 #include "hailfire_fpga_msgs/TestRegisters.h"
 
-#define HAILFIRE_FPGA_RATE_HZ 50
 #define HAILFIRE_FPGA_MAX_MSG 50
 
 // Read odometer counts: 0x11 to 0x14 and speeds: 0x21 to 0x24
@@ -113,32 +112,32 @@ struct FPGAKeyValue
 /**
  * @brief Returns an hexadecimal dump of the given byte array.
  */
-std::string dump_bytes(std::vector<uint8_t> const &bytes);
+std::string dump_bytes(std::vector<uint8_t> const& bytes);
 
 /**
  * @brief Returns an hexadecimal dump of the given FPGAKeyValue array.
  */
-std::string dump_bytes(std::vector<FPGAKeyValue> const &kv_pairs);
+std::string dump_bytes(std::vector<FPGAKeyValue> const& kv_pairs);
 
 /**
  * @brief Returns a vector of bytes from an (u)int(8|16|32) value.
  */
-std::vector<uint8_t> bytes_from_uint8(uint8_t const &value);
-std::vector<uint8_t> bytes_from_uint16(uint16_t const &value);
-std::vector<uint8_t> bytes_from_uint32(uint32_t const &value);
-std::vector<uint8_t> bytes_from_int8(int8_t const &value);
-std::vector<uint8_t> bytes_from_int16(int16_t const &value);
-std::vector<uint8_t> bytes_from_int32(int32_t const &value);
+std::vector<uint8_t> bytes_from_uint8(uint8_t const& value);
+std::vector<uint8_t> bytes_from_uint16(uint16_t const& value);
+std::vector<uint8_t> bytes_from_uint32(uint32_t const& value);
+std::vector<uint8_t> bytes_from_int8(int8_t const& value);
+std::vector<uint8_t> bytes_from_int16(int16_t const& value);
+std::vector<uint8_t> bytes_from_int32(int32_t const& value);
 
 /**
  * @brief Returns an (u)int(8|16|32) value from a vector of bytes.
  */
-uint8_t uint8_from_bytes(std::vector<uint8_t> const &bytes);
-uint16_t uint16_from_bytes(std::vector<uint8_t> const &bytes);
-uint32_t uint32_from_bytes(std::vector<uint8_t> const &bytes);
-int8_t int8_from_bytes(std::vector<uint8_t> const &bytes);
-int16_t int16_from_bytes(std::vector<uint8_t> const &bytes);
-int32_t int32_from_bytes(std::vector<uint8_t> const &bytes);
+uint8_t uint8_from_bytes(std::vector<uint8_t> const& bytes);
+uint16_t uint16_from_bytes(std::vector<uint8_t> const& bytes);
+uint32_t uint32_from_bytes(std::vector<uint8_t> const& bytes);
+int8_t int8_from_bytes(std::vector<uint8_t> const& bytes);
+int16_t int16_from_bytes(std::vector<uint8_t> const& bytes);
+int32_t int32_from_bytes(std::vector<uint8_t> const& bytes);
 
 /**
  * @class FPGANode
@@ -164,6 +163,10 @@ public:
    * ~spidev/lsb_first       appropriate setter is called if present
    * ~spidev/bits_per_word   appropriate setter is called if present
    * ~spidev/max_speed       appropriate setter is called if present
+   * ~odometer_rate          publish rate for /odometer* topics (in Hz)
+   * ~ext_rate               publish rate for /ext* topics (in Hz)
+   * ~ir_sensor_rate         publish rate for /ir_sensor* topics (in Hz)
+   * ~test_rate              publish rate for /test* topics (in Hz)
    *
    */
   FPGANode();
@@ -172,11 +175,6 @@ public:
    * @brief Destructor: cleans up
    */
   ~FPGANode();
-
-  /**
-   * @brief Main loop
-   */
-  void spin();
 
 private:
 
@@ -193,46 +191,46 @@ private:
   /**
    * @brief Publishes odometer counts and speeds.
    *
-   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * This method is called regularly (at ~odometer_rate) to manage the
    * following topics: /odometer/port[1-4] and /odometer/all.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
    */
-  void publishOdometers();
+  void publishOdometers(ros::TimerEvent const& event);
 
   /**
    * @brief Publishes ext port values.
    *
-   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * This method is called regularly (at ~ext_rate) to manage the
    * following topics: /ext/port[1-7] and /ext/all.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
    */
-  void publishExtPorts();
+  void publishExtPorts(ros::TimerEvent const& event);
 
   /**
    * @brief Publishes IR sensor values.
    *
-   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * This method is called regularly (at ~ir_sensor_rate) to manage the
    * following topics: /ir_sensor/port[1-8] and /ir_sensor/all.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
    */
-  void publishIRSensors();
+  void publishIRSensors(ros::TimerEvent const& event);
 
   /**
    * @brief Publishes test register values.
    *
-   * This method is called regularly (at HAILFIRE_FPGA_RATE_HZ) to manage the
+   * This method is called regularly (at ~test_rate) to manage the
    * /test/fixed and /test/reg_read topics.
    *
    * No messages are published on topics without subscribers, neither are the
    * unused values fetched from the FPGA.
    */
-  void publishTestRegisters();
+  void publishTestRegisters(ros::TimerEvent const& event);
 
   /**
    * @brief Handle reset message.
@@ -240,7 +238,7 @@ private:
    * This method is called by ROS when a message is published on the /reset
    * topic. It transforms and forwards the message to the FPGA.
    */
-  void handleReset(const std_msgs::Empty::ConstPtr &empty);
+  void handleReset(std_msgs::Empty::ConstPtr const& empty);
 
   /**
    * @brief Handles LED on/off messages.
@@ -250,7 +248,7 @@ private:
    *
    * In the std_msgs::Bool message, set data to true for "on", false for "off".
    */
-  void handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg);
+  void handleLedMsg(uint8_t led_key, std_msgs::Bool::ConstPtr const& msg);
 
   /**
    * @brief Handles motor consign messages.
@@ -262,7 +260,7 @@ private:
    *
    * NB: -1024 <= speed consign < 1024
    */
-  void handleMotorMsg(uint8_t motor_nb, const std_msgs::Int16::ConstPtr &msg);
+  void handleMotorMsg(uint8_t motor_nb, std_msgs::Int16::ConstPtr const& msg);
 
   /**
    * @brief Handles servo consign messages.
@@ -274,7 +272,7 @@ private:
    *
    * Note: 12500 < position consign < 62500 (for most servos), 0 to disable
    */
-  void handleServoMsg(uint8_t servo_nb, const std_msgs::UInt16::ConstPtr &msg);
+  void handleServoMsg(uint8_t servo_nb, std_msgs::UInt16::ConstPtr const& msg);
 
   /**
    * @brief Handles multi-motor consign messages.
@@ -282,7 +280,7 @@ private:
    * This method is called by ROS when a message is published on the
    * /motor/combined topic. It transforms and forwards the message to the FPGA.
    */
-  void handleMotorCombinedMsg(const hailfire_fpga_msgs::MotorArray::ConstPtr &msg);
+  void handleMotorCombinedMsg(hailfire_fpga_msgs::MotorArray::ConstPtr const& msg);
 
   /**
    * @brief Handles multi-servo consign messages.
@@ -290,7 +288,7 @@ private:
    * This method is called by ROS when a message is published on the
    * /servo/combined topic. It transforms and forwards the message to the FPGA.
    */
-  void handleServoCombinedMsg(const hailfire_fpga_msgs::ServoArray::ConstPtr &msg);
+  void handleServoCombinedMsg(hailfire_fpga_msgs::ServoArray::ConstPtr const& msg);
 
   /**
    * @brief Handles test register write messages.
@@ -298,7 +296,7 @@ private:
    * This method is called by ROS when a message is published on the
    * /test/reg_write topic. It transforms and forwards the message to the FPGA.
    */
-  void handleTestRegistersMsg(const hailfire_fpga_msgs::TestRegisters::ConstPtr &msg);
+  void handleTestRegistersMsg(hailfire_fpga_msgs::TestRegisters::ConstPtr const& msg);
 
   /**
    * @brief Handles the encoding/decoding of FPGA messages and .
@@ -313,12 +311,15 @@ private:
 
   ros::Publisher odometers_pub_;                /**< /odometer/all publisher */
   std::vector<ros::Publisher> odometer_pub_;    /**< /odometer/port[1-4] publishers */
+  ros::Timer odometer_timer_;                  /**< Timer for publishOdometers */
 
   ros::Publisher ext_ports_pub_;                /**< /ext/all publisher */
   std::vector<ros::Publisher> ext_port_pub_;    /**< /ext/port[1-7] publishers */
+  ros::Timer ext_port_timer_;                  /**< Timer for publishExtPorts */
 
   ros::Publisher ir_sensors_pub_;               /**< /ir_sensor/all publisher */
   std::vector<ros::Publisher> ir_sensor_pub_;   /**< /ir_sensor/port[1-8] publishers */
+  ros::Timer ir_sensor_timer_;                  /**< Timer for publishIRSensors */
 
   ros::Subscriber reset_sub_;                   /**< /reset subscriber */
 
@@ -334,19 +335,20 @@ private:
   ros::Publisher fixed_pub_;                    /**< /test/fixed publisher */
   ros::Publisher reg_read_pub_;                 /**< /test/reg_read publisher */
   ros::Subscriber reg_write_sub_;               /**< /test/reg_write subscriber */
+  ros::Timer test_timer_;                       /**< Timer for publishTestRegisters */
 
   hailfire_spi::SPIDevice *spi_device_;         /**< The SPI device instance */
 };
 
 FPGANode::FPGANode()
 {
-  ros::NodeHandle nh_param("~spidev");
+  ros::NodeHandle nh_spidev("~spidev");
 
   std::string dev_name;
-  nh_param.param("dev_name", dev_name, std::string("/dev/spidev1.1"));
+  nh_spidev.param("dev_name", dev_name, std::string("/dev/spidev1.1"));
 
   bool inhibit;
-  nh_param.param("inhibit", inhibit, false);
+  nh_spidev.param("inhibit", inhibit, false);
   if (inhibit)
   {
     ROS_INFO("~spidev/inhibit set: SPI will not be used");
@@ -359,28 +361,28 @@ FPGANode::FPGANode()
   }
 
   int mode;
-  if (spi_device_ && nh_param.getParam("mode", mode))
+  if (spi_device_ && nh_spidev.getParam("mode", mode))
   {
     ROS_INFO("SPI mode: %u", mode);
     spi_device_->setMode(mode);
   }
 
   bool lsb_first;
-  if (spi_device_ && nh_param.getParam("lsb_first", lsb_first))
+  if (spi_device_ && nh_spidev.getParam("lsb_first", lsb_first))
   {
     ROS_INFO("SPI lsb_first: %s", (lsb_first ? "true" : "false"));
     spi_device_->setLSBFirst(lsb_first);
   }
 
   int bits_per_word;
-  if (spi_device_ && nh_param.getParam("bits_per_word", bits_per_word))
+  if (spi_device_ && nh_spidev.getParam("bits_per_word", bits_per_word))
   {
     ROS_INFO("SPI bits_per_word: %u", bits_per_word);
     spi_device_->setBitsPerWord(bits_per_word);
   }
 
   int max_speed;
-  if (spi_device_ && nh_param.getParam("max_speed", max_speed))
+  if (spi_device_ && nh_spidev.getParam("max_speed", max_speed))
   {
     ROS_INFO("SPI max_speed: %u", max_speed);
     spi_device_->setMaxSpeed(max_speed);
@@ -388,6 +390,39 @@ FPGANode::FPGANode()
 
   setupAdvertisements();
   setupSubscriptions();
+
+  ros::NodeHandle nh_param("~");
+  int odometer_rate;
+  if (!nh_param.getParam("odometer_rate", odometer_rate))
+  {
+    ROS_ERROR("Missing ~odometer_rate publish rate param.");
+    exit(1);
+  }
+  odometer_timer_ = nh_.createTimer(ros::Rate(odometer_rate), &FPGANode::publishOdometers, this);
+
+  int ext_rate;
+  if (!nh_param.getParam("ext_rate", ext_rate))
+  {
+    ROS_ERROR("Missing ~ext_rate publish rate param.");
+    exit(1);
+  }
+  ext_port_timer_ = nh_.createTimer(ros::Rate(ext_rate), &FPGANode::publishExtPorts, this);
+
+  int ir_sensor_rate;
+  if (!nh_param.getParam("ir_sensor_rate", ir_sensor_rate))
+  {
+    ROS_ERROR("Missing ~ir_sensor_rate publish rate param.");
+    exit(1);
+  }
+  ir_sensor_timer_ = nh_.createTimer(ros::Rate(ir_sensor_rate), &FPGANode::publishIRSensors, this);
+
+  int test_rate;
+  if (!nh_param.getParam("test_rate", test_rate))
+  {
+    ROS_ERROR("Missing ~test_rate publish rate param.");
+    exit(1);
+  }
+  test_timer_ = nh_.createTimer(ros::Rate(test_rate), &FPGANode::publishTestRegisters, this);
 
   ROS_INFO("Ready to service FPGA requests");
 }
@@ -397,20 +432,6 @@ FPGANode::~FPGANode()
   if (spi_device_)
   {
     delete spi_device_;
-  }
-}
-
-void FPGANode::spin()
-{
-  ros::Rate r(HAILFIRE_FPGA_RATE_HZ); // Hz
-  while (nh_.ok())
-  {
-    ros::spinOnce(); // check for incoming messages
-    publishOdometers();
-    publishExtPorts();
-    publishIRSensors();
-    publishTestRegisters();
-    r.sleep();
   }
 }
 
@@ -520,7 +541,7 @@ void FPGANode::setupSubscriptions()
   reg_write_sub_ = nh_test.subscribe("reg_write", 1, &FPGANode::handleTestRegistersMsg, this);
 }
 
-void FPGANode::publishOdometers()
+void FPGANode::publishOdometers(ros::TimerEvent const& event)
 {
   unsigned int i;
 
@@ -587,7 +608,7 @@ void FPGANode::publishOdometers()
     odometers_pub_.publish(all_msg);
 }
 
-void FPGANode::publishExtPorts()
+void FPGANode::publishExtPorts(ros::TimerEvent const& event)
 {
   unsigned int i;
 
@@ -655,7 +676,7 @@ void FPGANode::publishExtPorts()
     ext_ports_pub_.publish(all_msg);
 }
 
-void FPGANode::publishIRSensors()
+void FPGANode::publishIRSensors(ros::TimerEvent const& event)
 {
   unsigned int i;
 
@@ -715,7 +736,7 @@ void FPGANode::publishIRSensors()
     ir_sensors_pub_.publish(all_msg);
 }
 
-void FPGANode::publishTestRegisters()
+void FPGANode::publishTestRegisters(ros::TimerEvent const& event)
 {
   std::vector<FPGAKeyValue> kv_pairs;
 
@@ -797,7 +818,7 @@ void FPGANode::publishTestRegisters()
   }
 }
 
-void FPGANode::handleReset(const std_msgs::Empty::ConstPtr &empty)
+void FPGANode::handleReset(std_msgs::Empty::ConstPtr const& empty)
 {
   FPGAKeyValue reset;
   reset.key = HAILFIRE_FPGA_RESET;
@@ -809,7 +830,7 @@ void FPGANode::handleReset(const std_msgs::Empty::ConstPtr &empty)
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg)
+void FPGANode::handleLedMsg(uint8_t led_key, std_msgs::Bool::ConstPtr const& msg)
 {
   // Set led on/off bool
   FPGAKeyValue set_led;
@@ -822,7 +843,7 @@ void FPGANode::handleLedMsg(uint8_t led_key, const std_msgs::Bool::ConstPtr &msg
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleMotorMsg(uint8_t motor_nb, const std_msgs::Int16::ConstPtr &msg)
+void FPGANode::handleMotorMsg(uint8_t motor_nb, std_msgs::Int16::ConstPtr const& msg)
 {
   // Set int16 motor speed
   FPGAKeyValue set_motor;
@@ -835,7 +856,7 @@ void FPGANode::handleMotorMsg(uint8_t motor_nb, const std_msgs::Int16::ConstPtr 
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleServoMsg(uint8_t servo_nb, const std_msgs::UInt16::ConstPtr &msg)
+void FPGANode::handleServoMsg(uint8_t servo_nb, std_msgs::UInt16::ConstPtr const& msg)
 {
   // Set uint16 servo consign speed
   FPGAKeyValue set_servo;
@@ -848,7 +869,7 @@ void FPGANode::handleServoMsg(uint8_t servo_nb, const std_msgs::UInt16::ConstPtr
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleMotorCombinedMsg(const hailfire_fpga_msgs::MotorArray::ConstPtr &msg)
+void FPGANode::handleMotorCombinedMsg(hailfire_fpga_msgs::MotorArray::ConstPtr const& msg)
 {
   std::vector<FPGAKeyValue> kv_pairs;
   kv_pairs.reserve(msg->motors.size());
@@ -865,7 +886,7 @@ void FPGANode::handleMotorCombinedMsg(const hailfire_fpga_msgs::MotorArray::Cons
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleServoCombinedMsg(const hailfire_fpga_msgs::ServoArray::ConstPtr &msg)
+void FPGANode::handleServoCombinedMsg(hailfire_fpga_msgs::ServoArray::ConstPtr const& msg)
 {
   std::vector<FPGAKeyValue> kv_pairs;
   kv_pairs.reserve(msg->servos.size());
@@ -882,7 +903,7 @@ void FPGANode::handleServoCombinedMsg(const hailfire_fpga_msgs::ServoArray::Cons
   doTransfer(kv_pairs);
 }
 
-void FPGANode::handleTestRegistersMsg(const hailfire_fpga_msgs::TestRegisters::ConstPtr &msg)
+void FPGANode::handleTestRegistersMsg(hailfire_fpga_msgs::TestRegisters::ConstPtr const& msg)
 {
   std::vector<FPGAKeyValue> kv_pairs;
 
@@ -984,7 +1005,7 @@ void FPGANode::doTransfer(std::vector<FPGAKeyValue> &kv_pairs)
   ROS_DEBUG_STREAM("Response pairs:" << dump_bytes(kv_pairs));
 }
 
-std::string dump_bytes(std::vector<uint8_t> const &bytes)
+std::string dump_bytes(std::vector<uint8_t> const& bytes)
 {
   std::stringstream ss;
   ss << std::setfill('0');
@@ -996,7 +1017,7 @@ std::string dump_bytes(std::vector<uint8_t> const &bytes)
   return ss.str();
 }
 
-std::string dump_bytes(std::vector<FPGAKeyValue> const &kv_pairs)
+std::string dump_bytes(std::vector<FPGAKeyValue> const& kv_pairs)
 {
   std::stringstream ss;
   ss << std::setfill('0');
@@ -1013,20 +1034,20 @@ std::string dump_bytes(std::vector<FPGAKeyValue> const &kv_pairs)
   return ss.str();
 }
 
-uint8_t uint8_from_bytes(std::vector<uint8_t> const &bytes)
+uint8_t uint8_from_bytes(std::vector<uint8_t> const& bytes)
 {
   uint8_t value = bytes[0];
   return value;
 }
 
-uint16_t uint16_from_bytes(std::vector<uint8_t> const &bytes)
+uint16_t uint16_from_bytes(std::vector<uint8_t> const& bytes)
 {
   uint16_t value = (bytes[0] << 8) |
                    (bytes[1] << 0);
   return value;
 }
 
-uint32_t uint32_from_bytes(std::vector<uint8_t> const &bytes)
+uint32_t uint32_from_bytes(std::vector<uint8_t> const& bytes)
 {
   uint32_t value = (bytes[0] << 24) |
                    (bytes[1] << 16) |
@@ -1035,32 +1056,32 @@ uint32_t uint32_from_bytes(std::vector<uint8_t> const &bytes)
   return value;
 }
 
-int8_t int8_from_bytes(std::vector<uint8_t> const &bytes)
+int8_t int8_from_bytes(std::vector<uint8_t> const& bytes)
 {
   int8_t value = (int8_t) uint8_from_bytes(bytes);
   return value;
 }
 
-int16_t int16_from_bytes(std::vector<uint8_t> const &bytes)
+int16_t int16_from_bytes(std::vector<uint8_t> const& bytes)
 {
   int16_t value = (int16_t) uint16_from_bytes(bytes);
   return value;
 }
 
-int32_t int32_from_bytes(std::vector<uint8_t> const &bytes)
+int32_t int32_from_bytes(std::vector<uint8_t> const& bytes)
 {
   int32_t value = (int32_t) uint32_from_bytes(bytes);
   return value;
 }
 
-std::vector<uint8_t> bytes_from_uint8(uint8_t const &value)
+std::vector<uint8_t> bytes_from_uint8(uint8_t const& value)
 {
   std::vector<uint8_t> bytes (1, 0);
   bytes[0] = value;
   return bytes;
 }
 
-std::vector<uint8_t> bytes_from_uint16(uint16_t const &value)
+std::vector<uint8_t> bytes_from_uint16(uint16_t const& value)
 {
   std::vector<uint8_t> bytes (2, 0);
   bytes[0] = (value >> 8) & 0xFF;
@@ -1068,7 +1089,7 @@ std::vector<uint8_t> bytes_from_uint16(uint16_t const &value)
   return bytes;
 }
 
-std::vector<uint8_t> bytes_from_uint32(uint32_t const &value)
+std::vector<uint8_t> bytes_from_uint32(uint32_t const& value)
 {
   std::vector<uint8_t> bytes (4, 0);
   bytes[0] = (value >> 24) & 0xFF;
@@ -1078,19 +1099,19 @@ std::vector<uint8_t> bytes_from_uint32(uint32_t const &value)
   return bytes;
 }
 
-std::vector<uint8_t> bytes_from_int8(int8_t const &value)
+std::vector<uint8_t> bytes_from_int8(int8_t const& value)
 {
   uint8_t uvalue = (uint8_t) value;
   return bytes_from_uint8(uvalue);
 }
 
-std::vector<uint8_t> bytes_from_int16(int16_t const &value)
+std::vector<uint8_t> bytes_from_int16(int16_t const& value)
 {
   uint16_t uvalue = (uint16_t) value;
   return bytes_from_uint16(uvalue);
 }
 
-std::vector<uint8_t> bytes_from_int32(int32_t const &value)
+std::vector<uint8_t> bytes_from_int32(int32_t const& value)
 {
   uint32_t uvalue = (uint32_t) value;
   return bytes_from_uint32(uvalue);
@@ -1103,7 +1124,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "hailfire_fpga");
 
   hailfire_fpga::FPGANode fpga_node;
-  fpga_node.spin();
+  ros::spin();
 
   return 0;
 }
