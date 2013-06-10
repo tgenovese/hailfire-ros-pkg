@@ -63,7 +63,7 @@
 // Fixed value (0xDEADCODE) for testing
 #define HAILFIRE_FPGA_FIXED_VALUE 0x42
 
-// Read IR sensors: 0x51 to 0x58
+// Read IR sensors: 0x50 to 0x57
 #define HAILFIRE_FPGA_IR_SENSOR_NB 8
 #define HAILFIRE_FPGA_IR_SENSOR_BASE 0x50
 
@@ -693,7 +693,7 @@ void FPGANode::publishIRSensors(ros::TimerEvent const& event)
   for (i = 0; i < HAILFIRE_FPGA_IR_SENSOR_NB; ++i)
   {
     if (publish_all || publish_needed[i])
-      reading_needed.push_back((uint8_t) i + 1);
+      reading_needed.push_back((uint8_t) i);
   }
 
   // Nothing to do?
