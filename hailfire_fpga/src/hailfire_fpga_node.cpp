@@ -51,10 +51,9 @@
 
 #define HAILFIRE_FPGA_MAX_MSG 50
 
-// Read odometer counts: 0x11 to 0x14 and speeds: 0x21 to 0x24
+// Read odometer counts: 0x11 to 0x14
 #define HAILFIRE_FPGA_ODOMETER_NB 4
 #define HAILFIRE_FPGA_ODOMETER_COUNT_BASE 0x10
-#define HAILFIRE_FPGA_ODOMETER_SPEED_BASE 0x20
 
 // Read extension ports: 0x31 to 0x37
 #define HAILFIRE_FPGA_EXT_PORT_NB 7
@@ -189,7 +188,7 @@ private:
   void setupSubscriptions();
 
   /**
-   * @brief Publishes odometer counts and speeds.
+   * @brief Publishes odometer counts.
    *
    * This method is called regularly (at ~odometer_rate) to manage the
    * following topics: /odometer/port[1-4] and /odometer/all.
@@ -575,12 +574,6 @@ void FPGANode::publishOdometers(ros::TimerEvent const& event)
     read_count.key = HAILFIRE_FPGA_ODOMETER_COUNT_BASE + reading_needed[i];
     read_count.value.assign(4, 0);
     kv_pairs.push_back(read_count);
-
-    // Read int32 speed
-    FPGAKeyValue read_speed;
-    read_speed.key = HAILFIRE_FPGA_ODOMETER_SPEED_BASE + reading_needed[i];
-    read_speed.value.assign(4, 0);
-    kv_pairs.push_back(read_speed);
   }
 
   doTransfer(kv_pairs);
@@ -594,7 +587,6 @@ void FPGANode::publishOdometers(ros::TimerEvent const& event)
     {
       hailfire_fpga_msgs::Odometer single_msg;
       single_msg.count = int32_from_bytes(kv_pairs[pair_i++].value);
-      single_msg.speed = int32_from_bytes(kv_pairs[pair_i++].value);
 
       if (publish_needed[i])
         odometer_pub_[i].publish(single_msg);
